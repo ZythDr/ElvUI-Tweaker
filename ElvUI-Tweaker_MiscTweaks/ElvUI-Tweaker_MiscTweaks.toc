@@ -1,0 +1,13 @@
+## Interface: 30300
+## Title: ElvUI Tweaker: MiscTweaks
+## Notes: Miscellaneous tweaks for ElvUI-WotLK.
+## Author: ZythDr
+## Version: 1.0
+## RequiredDeps: ElvUI-Tweaker, ElvUI
+## Dependencies: ElvUI
+## OptionalDeps: ElvUI_AddOnSkins
+
+locales.lua
+MiscTweaks.lua
+init.lua
+modules\Load_Modules.xml

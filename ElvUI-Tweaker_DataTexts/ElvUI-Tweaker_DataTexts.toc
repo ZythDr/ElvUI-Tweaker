@@ -1,0 +1,12 @@
+## Interface: 30300
+## Title: ElvUI Tweaker: DataTexts
+## Notes: Collection of ElvUI DataText modules including Gold icon scaling, Movement Speed, and Online Count.
+## Author: ZythDr
+## Version: 1.0
+## RequiredDeps: ElvUI-Tweaker, ElvUI
+## Dependencies: ElvUI
+
+DataTexts.lua
+init.lua
+locales.lua
+modules\Load_Modules.xml

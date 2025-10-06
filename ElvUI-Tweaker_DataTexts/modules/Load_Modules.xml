@@ -1,0 +1,11 @@
+<Ui xmlns="http://www.blizzard.com/wow/ui/">
+    <!-- Modules loader for MiscTweaks.  Add new module <Script file="..\modules\YourModule.lua"/> entries here. -->
+    <Script file="..\modules\MovementSpeed.lua"/>
+    <Script file="..\modules\OnlineCount.lua"/>
+    <Script file="..\modules\GoldScaleFix.lua"/>
+    <!--<Script file="..\modules\FiveSecondRule.lua"/>-->
+    <!--<Script file="..\modules\GameTimeDisplay.lua"/>-->
+    <!--<Script file="..\modules\TooltipAnchor.lua"/>-->
+    <!--<Script file="..\modules\ShapeshiftRemover.lua"/>-->
+    <!-- Add other modules below in the order you want them loaded -->
+</Ui>

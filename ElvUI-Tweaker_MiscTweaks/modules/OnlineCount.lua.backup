@@ -1,0 +1,913 @@
+-- OnlineCount.lua
+-- MiscTweaks submodule: "Online Count"
+-- Optimized WHO polling with proven ghost-frame prevention.
+-- Uses simplified frame hiding approach that successfully prevents UI stack contamination.
+
+local core = EWTweaker and EWTweaker.GetCore and EWTweaker.GetCore()
+if not core then return end
+local MOD = core.modules and core.modules.MiscTweaks
+if not MOD then return end
+
+local SUB = { name = "Online Count" }
+SUB.defaults = {
+    enabled = true,
+    updateInterval = 60, -- seconds
+    manualClickCooldown = 5,
+    preferLibWhoOnly = false, -- if true, use LibWho only (no native SendWho fallback)
+    debug = false,
+}
+
+local db_local
+
+local E, L, V, P, G = unpack(ElvUI)
+local DT = E:GetModule("DataTexts")
+local REG_NAME = "Online Count"
+local displayName = "|cff00FF96Online|r"
+local valueColor = E.media.hexvaluecolor or "|cffffffff"
+
+-- state
+local onlineCount, lastUpdateTime = nil, nil
+local sessionMax, sessionMin, sessionSum, sessionCount = nil, nil, 0, 0
+
+local driver, ticker, onupdateFrame, onupdateAccum = nil, nil, nil, 0
+local isFetching, lastManualRequest = false, 0
+
+-- LibWho / external libs (kept for compatibility; we prefer native but detect libs)
+local LibWho = nil
+local DetectedWhoLib = nil
+local whoQueryTime = 0
+local acceptWindow = 5 -- seconds
+
+-- suppression bookkeeping
+local suppressWho = false
+local suppressedFriends = false
+local suppressedWho = false
+local friendsWasShownAtRequest = false
+local origFriendsShow, origWhoShow = nil, nil
+
+-- datatext panel tracking
+local activePanel = nil
+local panelTextSetterCache = setmetatable({}, { __mode = "k" })
+
+-- module-origin flag for WHO responses
+local lastWhoByModule = false
+
+-- OnShow hook guards
+local ffOnShowHooked, wfOnShowHooked = false, false
+
+-- UIHider for reparenting WhoFrame temporarily
+local _OnlineCount_UIHider = _OnlineCount_UIHider or CreateFrame("Frame")
+_OnlineCount_UIHider:Hide()
+
+-- UIPanel backup
+local __UIPanelWindows_backup_Who = nil
+
+-- Track whether FriendsFrame had WHO_LIST_UPDATE registered when we start the native query
+local friends_who_event_was_registered = nil
+
+-- list of major frames to check before polling (expand as needed)
+local MajorFramesToCheck = {
+    _G.WhoFrame, _G.FriendsFrame, _G.CharacterFrame, _G.SpellBookFrame,
+    _G.QuestLogFrame, _G.AchievementFrame, _G.ReputationFrame, _G.GuildFrame,
+    _G.PaperDollFrame, _G.MerchantFrame, _G.InspectFrame, _G.GossipFrame,
+    _G.TalentFrame, _G.OpenMailFrame, _G.BankFrame, _G.TradeFrame,
+    _G.AuctionFrame, _G.LFGParentFrame, _G.PVPFrame, _G.PetStableFrame,
+    _G.DressUpFrame, _G.ItemSocketingFrame,
+}
+
+-- helpers
+local function dbg(...)
+    if db_local and db_local.debug then
+        local parts = {}
+        for i = 1, select("#", ...) do parts[#parts+1] = tostring(select(i, ...)) end
+        print("|cff00aaff[OnlineCount]|r " .. table.concat(parts, " "))
+    end
+end
+
+local function updateSessionStats(n)
+    if not n then return end
+    if not sessionMax or n > sessionMax then sessionMax = n end
+    if not sessionMin or n < sessionMin then sessionMin = n end
+    sessionSum = (sessionSum or 0) + n
+    sessionCount = (sessionCount or 0) + 1
+end
+
+local function sessionAverage()
+    if not sessionCount or sessionCount <= 0 then return nil end
+    return math.floor((sessionSum / sessionCount) + 0.5)
+end
+
+-- ---- Utility: avoid polling when major UI is open ----
+local function AnyMajorFrameOpen()
+    for _, frame in ipairs(MajorFramesToCheck) do
+        if frame and frame:IsShown() then
+            return true
+        end
+    end
+    return false
+end
+
+-- ---- Panel setter caching / writing ----
+local function GetOrCachePanelTextSetter(panel)
+    if not panel then return nil end
+    local cached = panelTextSetterCache[panel]
+    if cached then return cached end
+
+    if panel.text and type(panel.text.SetText) == "function" then
+        panelTextSetterCache[panel] = function(s) pcall(panel.text.SetText, panel.text, s) end
+        return panelTextSetterCache[panel]
+    end
+    if panel.Text and type(panel.Text.SetText) == "function" then
+        panelTextSetterCache[panel] = function(s) pcall(panel.Text.SetText, panel.Text, s) end
+        return panelTextSetterCache[panel]
+    end
+    if panel.Value and type(panel.Value.SetText) == "function" then
+        panelTextSetterCache[panel] = function(s) pcall(panel.Value.SetText, panel.Value, s) end
+        return panelTextSetterCache[panel]
+    end
+    if type(panel.SetFormattedText) == "function" then
+        panelTextSetterCache[panel] = function(s) pcall(panel.SetFormattedText, panel, "%s", s) end
+        return panelTextSetterCache[panel]
+    end
+    if type(panel.SetText) == "function" then
+        panelTextSetterCache[panel] = function(s) pcall(panel.SetText, panel, s) end
+        return panelTextSetterCache[panel]
+    end
+
+    local ok, regions = pcall(function() return { panel:GetRegions() } end)
+    if ok and regions then
+        for i = 1, #regions do
+            local region = regions[i]
+            if region and type(region.SetText) == "function" then
+                panelTextSetterCache[panel] = function(s) pcall(region.SetText, region, s) end
+                return panelTextSetterCache[panel]
+            end
+        end
+    end
+
+    local ok2, children = pcall(function() return { panel:GetChildren() } end)
+    if ok2 and children then
+        for _, child in ipairs(children) do
+            local ok3, cregions = pcall(function() return { child:GetRegions() } end)
+            if ok3 and cregions then
+                for i = 1, #cregions do
+                    local r = cregions[i]
+                    if r and type(r.SetText) == "function" then
+                        panelTextSetterCache[panel] = function(s) pcall(r.SetText, r, s) end
+                        return panelTextSetterCache[panel]
+                    end
+                end
+            end
+        end
+    end
+
+    panelTextSetterCache[panel] = nil
+    return nil
+end
+
+local function WriteTextToPanel(panel, str)
+    if not panel then return end
+    local setter = GetOrCachePanelTextSetter(panel)
+    if setter then setter(str); return end
+    pcall(function()
+        if panel.text and type(panel.text.SetText) == "function" then panel.text:SetText(str) end
+        if panel.Text and type(panel.Text.SetText) == "function" then panel.Text:SetText(str) end
+        if panel.Value and type(panel.Value.SetText) == "function" then panel.Value:SetText(str) end
+        if type(panel.SetFormattedText) == "function" then panel:SetFormattedText("%s", str) end
+        if type(panel.SetText) == "function" then panel:SetText(str) end
+    end)
+end
+
+-- ---- Display updates ----
+local function UpdateDisplay(panel)
+    panel = panel or activePanel
+    if not panel then return end
+    local count = onlineCount or 0
+    local str
+    if isFetching then
+        str = ("Online: %s%d...|r"):format(valueColor, count)
+    else
+        str = ("Online: %s%d|r"):format(valueColor, count)
+    end
+    WriteTextToPanel(panel, str)
+end
+
+local function UpdateAllDisplays()
+    if activePanel then UpdateDisplay(activePanel) end
+    if DT.RegisteredDataTexts and DT.RegisteredDataTexts[REG_NAME] and DT.RegisteredDataTexts[REG_NAME].frame then
+        UpdateDisplay(DT.RegisteredDataTexts[REG_NAME].frame)
+    end
+end
+
+-- ---- WhoFrame parsing (native fallback) ----
+ReadWhoFrameTotalFromUI = function()
+    local wf = _G.WhoFrame
+    if not wf then return nil end
+
+    local function scanRegionForTotal(region)
+        if not region or type(region.GetText) ~= "function" then return nil end
+        local txt = region:GetText()
+        if not txt or type(txt) ~= "string" then return nil end
+        if not (txt:find("[Pp]eople") or txt:find("[Ff]ound") or txt:find("%d+%s*%(")) then return nil end
+        local best = 0
+        for token in txt:gmatch("(%d[%d%.,%s]*)") do
+            local clean = token:gsub("[%s,%.]", "")
+            local n = tonumber(clean)
+            if n and n > best then best = n end
+        end
+        if best > 0 then return best, txt end
+        return nil
+    end
+
+    for i = 1, select("#", wf:GetRegions()) do
+        local region = select(i, wf:GetRegions())
+        local n, raw = scanRegionForTotal(region)
+        if n then return n, raw end
+    end
+    for _, child in ipairs({ wf:GetChildren() }) do
+        for i = 1, select("#", child:GetRegions()) do
+            local region = select(i, child:GetRegions())
+            local n, raw = scanRegionForTotal(region)
+            if n then return n, raw end
+        end
+    end
+
+    return nil
+end
+
+-- ---- Suppression helpers ----
+local function HideFriendsAndWhoQuietly()
+    pcall(function() if _G.FriendsFrame and _G.FriendsFrame:IsShown() then _G.FriendsFrame:Hide() end end)
+    pcall(function() if _G.WhoFrame and _G.WhoFrame:IsShown() then _G.WhoFrame:Hide() end end)
+end
+
+local function EnsureOnShowHooks()
+    local ff = _G.FriendsFrame
+    local wf = _G.WhoFrame
+    if ff and not ffOnShowHooked then
+        ff:HookScript("OnShow", function(self) if suppressWho then pcall(self.Hide, self) end end)
+        ffOnShowHooked = true
+    end
+    if wf and not wfOnShowHooked then
+        wf:HookScript("OnShow", function(self) if suppressWho then pcall(self.Hide, self) end end)
+        wfOnShowHooked = true
+    end
+end
+
+local function ClearSuppression()
+    -- restore UI wrappers if somehow still installed
+    if type(ShowUIPanel) == "function" and _G and _G.WhoFrame and ShowUIPanel == nil then
+        -- no-op: defensive, but we will call restore_ui_wrappers below
+    end
+
+    -- restore wrappers and cleanup as a safety net
+    pcall(function() if restore_ui_wrappers then restore_ui_wrappers() end end)
+
+    suppressWho = false
+    isFetching = false
+    pcall(function()
+        local ff = _G.FriendsFrame
+        local wf = _G.WhoFrame
+        if suppressedFriends and ff and origFriendsShow and type(origFriendsShow) == "function" then ff.Show = origFriendsShow; origFriendsShow = nil end
+        if suppressedWho and wf and origWhoShow and type(origWhoShow) == "function" then wf.Show = origWhoShow; origWhoShow = nil end
+    end)
+    suppressedFriends = false
+    suppressedWho = false
+    friendsWasShownAtRequest = false
+    lastWhoByModule = false
+    UpdateAllDisplays()
+end
+
+-- Aggressive clear helper (used as fallback safety)
+local function ForceClearWhoUI()
+    pcall(function()
+        if type(C_FriendList) == "table" and type(C_FriendList.SetWhoToUi) == "function" then
+            local ok, err = pcall(C_FriendList.SetWhoToUi, false)
+            dbg("ForceClearWhoUI: C_FriendList.SetWhoToUi returned", ok, err or "")
+        end
+        if type(SetWhoToUi) == "function" then
+            local ok, err = pcall(SetWhoToUi, false)
+            dbg("ForceClearWhoUI: SetWhoToUi returned", ok, err or "")
+        end
+        if type(HideUIPanel) == "function" and _G.WhoFrame then
+            local ok, err = pcall(HideUIPanel, _G.WhoFrame)
+            dbg("ForceClearWhoUI: HideUIPanel returned", ok, err or "")
+        end
+        if _G.WhoFrame and type(_G.WhoFrame.Hide) == "function" then
+            local ok, err = pcall(_G.WhoFrame.Hide, _G.WhoFrame)
+            dbg("ForceClearWhoUI: WhoFrame:Hide returned", ok, err or "")
+        end
+        if type(UpdateUIPanelPositions) == "function" then
+            local ok, err = pcall(UpdateUIPanelPositions)
+            dbg("ForceClearWhoUI: UpdateUIPanelPositions returned", ok, err or "")
+        end
+    end)
+end
+
+-- Implement RemoveGhostWhoFrame
+local function RemoveGhostWhoFrame()
+    dbg("RemoveGhostWhoFrame: start")
+    ForceClearWhoUI()
+
+    pcall(function()
+        if _G.WhoFrame then
+            if _G.WhoFrame:IsShown() then
+                local ok, err = pcall(_G.WhoFrame.Hide, _G.WhoFrame)
+                dbg("RemoveGhostWhoFrame: WhoFrame.Hide:", ok, err or "")
+            end
+            if _G.WhoFrame:GetParent() ~= UIParent then
+                pcall(function() _G.WhoFrame:SetParent(UIParent) end)
+            end
+        end
+    end)
+
+    pcall(function()
+        local ff = _G.FriendsFrame
+        if ff and ff.RegisterEvent and not ff:IsEventRegistered("WHO_LIST_UPDATE") then
+            pcall(function() ff:RegisterEvent("WHO_LIST_UPDATE") end)
+            dbg("RemoveGhostWhoFrame: re-registered FriendsFrame WHO_LIST_UPDATE")
+        end
+    end)
+
+    ForceClearWhoUI()
+    dbg("RemoveGhostWhoFrame: done")
+end
+
+-- ---- ShowUIPanel/HideUIPanel/SetWhoToUi wrappers (installed only around native SendWho) ----
+-- These variables and functions are intentionally local to file scope.
+local _orig_ShowUIPanel, _orig_HideUIPanel, _orig_SetWhoToUi, _orig_CFL_SetWhoToUi
+local ui_wrappers_installed = false
+
+local function install_ui_wrappers()
+    if ui_wrappers_installed then return end
+    -- save originals
+    _orig_ShowUIPanel = _orig_ShowUIPanel or ShowUIPanel
+    _orig_HideUIPanel = _orig_HideUIPanel or HideUIPanel
+    _orig_SetWhoToUi = _orig_SetWhoToUi or SetWhoToUi
+    if type(C_FriendList) == "table" and type(C_FriendList.SetWhoToUi) == "function" then
+        _orig_CFL_SetWhoToUi = _orig_CFL_SetWhoToUi or C_FriendList.SetWhoToUi
+    end
+
+    -- install wrappers
+    ShowUIPanel = function(frame, ...)
+        if frame == _G.WhoFrame and suppressWho then
+            dbg("ShowUIPanel wrapper: ignored ShowUIPanel(WhoFrame) due to suppressWho")
+            return
+        end
+        return _orig_ShowUIPanel(frame, ...)
+    end
+
+    HideUIPanel = function(frame, ...)
+        if frame == _G.WhoFrame and suppressWho then
+            dbg("HideUIPanel wrapper: ignored HideUIPanel(WhoFrame) due to suppressWho")
+            return
+        end
+        return _orig_HideUIPanel(frame, ...)
+    end
+
+    if _orig_SetWhoToUi then
+        SetWhoToUi = function(state, ...)
+            if _G.WhoFrame and suppressWho then
+                dbg("SetWhoToUi wrapper: ignored SetWhoToUi due to suppressWho")
+                return
+            end
+            return _orig_SetWhoToUi(state, ...)
+        end
+    end
+
+    if _orig_CFL_SetWhoToUi then
+        C_FriendList.SetWhoToUi = function(state, ...)
+            if _G.WhoFrame and suppressWho then
+                dbg("C_FriendList.SetWhoToUi wrapper: ignored due to suppressWho")
+                return true -- pretend success
+            end
+            return _orig_CFL_SetWhoToUi(state, ...)
+        end
+    end
+
+    ui_wrappers_installed = true
+    dbg("install_ui_wrappers: installed")
+end
+
+local function restore_ui_wrappers()
+    if not ui_wrappers_installed then return end
+    if _orig_ShowUIPanel then ShowUIPanel = _orig_ShowUIPanel end
+    if _orig_HideUIPanel then HideUIPanel = _orig_HideUIPanel end
+    if _orig_SetWhoToUi then SetWhoToUi = _orig_SetWhoToUi end
+    if _orig_CFL_SetWhoToUi and type(C_FriendList) == "table" then C_FriendList.SetWhoToUi = _orig_CFL_SetWhoToUi end
+    ui_wrappers_installed = false
+    dbg("restore_ui_wrappers: restored")
+end
+
+-- ---- External Who lib detection and cooperative queries ----
+local function DetectExternalWhoLib()
+    if DetectedWhoLib then return DetectedWhoLib end
+    if type(LibStub) == "function" then
+        DetectedWhoLib = LibStub("LibWho-3.0", true) or LibStub("LibWho-2.0", true) or LibStub("WhoLib-1.0", true)
+    end
+    if not DetectedWhoLib and _G.WhoLib then DetectedWhoLib = _G.WhoLib end
+    return DetectedWhoLib
+end
+
+local function TryExternalLibWhoQuery()
+    local lib = LibWho or DetectExternalWhoLib()
+    if not lib then return false end
+
+    if type(lib.WhoInProgress) == "boolean" and lib.WhoInProgress then
+        dbg("TryExternalLibWhoQuery: external lib busy (WhoInProgress)")
+        return false
+    end
+    if type(lib.state) == "function" then
+        local ok, st = pcall(lib.state, lib)
+        if ok and st == 2 then
+            dbg("TryExternalLibWhoQuery: external lib waiting for response")
+            return false
+        end
+    end
+
+    local ok, err = pcall(function()
+        if type(lib.Who) == "function" then
+            lib:Who("", function(query, results)
+                if _G.WhoFrame and _G.WhoFrame:IsShown() then
+                    isFetching = false
+                    lastWhoByModule = false
+                    UpdateAllDisplays()
+                    return
+                end
+                local total = 0
+                if results then total = #results end
+                onlineCount = total
+                lastUpdateTime = date("%H:%M")
+                updateSessionStats(total)
+                isFetching = false
+                lastWhoByModule = false
+                UpdateAllDisplays()
+            end)
+        elseif type(lib.ConsoleWho) == "function" then
+            lib:ConsoleWho("")
+        elseif type(lib.AskWho) == "function" then
+            lib:AskWho("")
+        else
+            error("External lib has no usable API")
+        end
+    end)
+    if ok then
+        isFetching = true
+        lastWhoByModule = true
+        whoQueryTime = GetTime()
+        UpdateAllDisplays()
+        return true
+    else
+        dbg("TryExternalLibWhoQuery failed:", tostring(err))
+        return false
+    end
+end
+
+-- ---- Native suppressed /who (fallback) ----
+local function NativeRequestWhoQuiet()
+    if isFetching then return end
+
+    -- If an external Who lib exists and is busy, do not call native SendWho; retry later
+    local ext = LibWho or DetectedWhoLib
+    if not ext and type(LibStub) == "function" then ext = LibStub("LibWho-3.0", true) or LibStub("LibWho-2.0", true) end
+    if ext then
+        local busy = false
+        if type(ext.WhoInProgress) == "boolean" and ext.WhoInProgress then busy = true end
+        if not busy and type(ext.state) == "function" then
+            local ok, st = pcall(ext.state, ext)
+            if ok and st == 2 then busy = true end
+        end
+        if busy then
+            dbg("NativeRequestWhoQuiet: external lib busy; retrying in 3s")
+            if C_Timer and C_Timer.After then C_Timer.After(3, RequestWhoQuiet) end
+            return
+        end
+    end
+
+    EnsureOnShowHooks()
+
+    -- Prepare for safe "quiet /who": detach WhoFrame and remove UIPanelWindows entry to prevent UIPanel stack push
+    local wf = _G.WhoFrame
+    local ff = _G.FriendsFrame
+    local origWhoParent = nil
+
+    -- Backup UIPanelWindows entry
+    if wf and type(UIPanelWindows) == "table" then
+        __UIPanelWindows_backup_Who = UIPanelWindows["WhoFrame"]
+        UIPanelWindows["WhoFrame"] = nil
+        dbg("NativeRequestWhoQuiet: removed UIPanelWindows['WhoFrame']")
+    end
+
+    -- Backup and temporarily unregister FriendsFrame WHO_LIST_UPDATE to avoid race
+    friends_who_event_was_registered = nil
+    pcall(function()
+        if ff and ff.IsEventRegistered and ff.UnregisterEvent then
+            if ff:IsEventRegistered("WHO_LIST_UPDATE") then
+                friends_who_event_was_registered = true
+                ff:UnregisterEvent("WHO_LIST_UPDATE")
+                dbg("NativeRequestWhoQuiet: temporarily unregistered FriendsFrame WHO_LIST_UPDATE")
+            else
+                friends_who_event_was_registered = false
+            end
+        end
+    end)
+
+    -- Reparent WhoFrame to hidden UIHider to prevent it being treated as visible
+    if wf and _OnlineCount_UIHider and wf.SetParent then
+        pcall(function()
+            origWhoParent = wf:GetParent()
+            wf:ClearAllPoints()
+            wf:SetParent(_OnlineCount_UIHider)
+            wf:SetPoint("CENTER", _OnlineCount_UIHider, "CENTER", 0, 0)
+            wf:Hide()
+            dbg("NativeRequestWhoQuiet: reparented WhoFrame to UIHider")
+        end)
+    end
+
+    -- suppression bookkeeping
+    isFetching = true
+    suppressWho = true
+    suppressedFriends = false
+    suppressedWho = false
+    friendsWasShownAtRequest = false
+
+    if ff and ff:IsShown() then friendsWasShownAtRequest = true else friendsWasShownAtRequest = false end
+
+    if ff and not friendsWasShownAtRequest and ff.Show and type(ff.Show) == "function" then
+        origFriendsShow = ff.Show
+        ff.Show = function() end
+        suppressedFriends = true
+    else
+        origFriendsShow = nil
+    end
+
+    if wf and wf.Show and type(wf.Show) == "function" then
+        origWhoShow = wf.Show
+        wf.Show = function() end
+        suppressedWho = true
+    else
+        origWhoShow = nil
+    end
+
+    lastWhoByModule = true
+    whoQueryTime = GetTime()
+    UpdateAllDisplays()
+
+    -- Install wrappers to prevent WhoFrame from being pushed onto UIPanel stack by other code during query
+    install_ui_wrappers()
+
+    -- Send the query (wrapped)
+    pcall(function() SendWho("") end)
+
+    -- Immediate cleanup (clear flags and hide/stack)
+    ForceClearWhoUI()
+
+    -- Short delayed restore & cleanup (best-effort)
+    if C_Timer and C_Timer.After then
+        C_Timer.After(0.15, function()
+            -- restore UIPanelWindows entry
+            if type(UIPanelWindows) == "table" then
+                UIPanelWindows["WhoFrame"] = __UIPanelWindows_backup_Who
+                __UIPanelWindows_backup_Who = nil
+                dbg("NativeRequestWhoQuiet: restored UIPanelWindows['WhoFrame']")
+            end
+
+            -- restore FriendsFrame WHO_LIST_UPDATE registration if removed
+            pcall(function()
+                if ff and friends_who_event_was_registered and ff.RegisterEvent then
+                    ff:RegisterEvent("WHO_LIST_UPDATE")
+                    dbg("NativeRequestWhoQuiet: re-registered FriendsFrame WHO_LIST_UPDATE")
+                end
+            end)
+
+            -- restore parent and ensure hidden
+            pcall(function()
+                if wf and origWhoParent and wf.SetParent then
+                    wf:ClearAllPoints()
+                    wf:SetParent(origWhoParent or UIParent)
+                    pcall(function() wf:SetPoint("CENTER", UIParent, "CENTER", 0, 0) end)
+                    wf:Hide()
+                    dbg("NativeRequestWhoQuiet: restored WhoFrame parent and hid it")
+                end
+            end)
+
+            -- final cleanup pass
+            ForceClearWhoUI()
+
+            -- restore wrappers now that async work is likely finished
+            restore_ui_wrappers()
+        end)
+    else
+        if type(UIPanelWindows) == "table" then
+            UIPanelWindows["WhoFrame"] = __UIPanelWindows_backup_Who
+            __UIPanelWindows_backup_Who = nil
+        end
+        pcall(function()
+            if ff and friends_who_event_was_registered and ff.RegisterEvent then ff:RegisterEvent("WHO_LIST_UPDATE") end
+            if wf and origWhoParent and wf.SetParent then
+                wf:ClearAllPoints()
+                wf:SetParent(origWhoParent or UIParent)
+                pcall(function() wf:SetPoint("CENTER", UIParent, "CENTER", 0, 0) end)
+                wf:Hide()
+            end
+        end)
+        ForceClearWhoUI()
+        restore_ui_wrappers()
+    end
+
+    -- hide/restore frames based on initial visible state
+    if not friendsWasShownAtRequest then
+        HideFriendsAndWhoQuietly()
+    else
+        pcall(function() if _G.WhoFrame and _G.WhoFrame:IsShown() then _G.WhoFrame:Hide() end end)
+    end
+
+    -- fallback timeout to restore any suppression if WHO_LIST_UPDATE never fires
+    if C_Timer and C_Timer.After then
+        C_Timer.After(10, function() if suppressWho then ClearSuppression() end end)
+    end
+end
+
+-- ---- Request dispatcher ----
+local function RequestWhoQuiet()
+    if isFetching then return end
+    if _G.WhoFrame and _G.WhoFrame:IsShown() then return end
+
+    if AnyMajorFrameOpen then
+        if AnyMajorFrameOpen() then
+            dbg("RequestWhoQuiet: major UI open, delaying 30s")
+            if C_Timer and C_Timer.After then C_Timer.After(30, RequestWhoQuiet) end
+            return
+        end
+    end
+
+    -- refresh detection
+    if not (LibWho or DetectedWhoLib) and type(LibStub) == "function" then
+        LibWho = LibStub("LibWho-3.0", true) or LibStub("LibWho-2.0", true)
+        if not LibWho then DetectExternalWhoLib() end
+    end
+
+    local lib = LibWho or DetectExternalWhoLib()
+    if lib then
+        local used = TryExternalLibWhoQuery()
+        if used then return end
+        if db_local and db_local.preferLibWhoOnly then
+            dbg("RequestWhoQuiet: preferLibWhoOnly enabled and external lib query failed -> skip fallback")
+            isFetching = false
+            UpdateAllDisplays()
+            return
+        end
+
+        if type(lib.WhoInProgress) == "boolean" and lib.WhoInProgress then
+            dbg("RequestWhoQuiet: external lib busy; retry in 3s")
+            if C_Timer and C_Timer.After then C_Timer.After(3, RequestWhoQuiet) end
+            return
+        end
+    end
+
+    NativeRequestWhoQuiet()
+end
+
+-- ---- WHO_LIST_UPDATE handler ----
+local function OnWhoListUpdate()
+    local ff = _G.FriendsFrame
+    if ff and ff:IsShown() then
+        lastWhoByModule = false
+        ClearSuppression()
+        return
+    end
+
+    if not lastWhoByModule or (GetTime() - whoQueryTime) > acceptWindow then
+        ClearSuppression()
+        return
+    end
+
+    local total, raw = ReadWhoFrameTotalFromUI()
+    if total and total > 0 then
+        onlineCount = total
+        lastUpdateTime = date("%H:%M")
+        updateSessionStats(total)
+    else
+        local displayed = GetNumWhoResults and GetNumWhoResults() or 0
+        if displayed and displayed > 0 then
+            onlineCount = displayed
+            lastUpdateTime = date("%H:%M")
+            updateSessionStats(displayed)
+        end
+    end
+
+    ClearSuppression()
+    UpdateAllDisplays()
+    RemoveGhostWhoFrame()
+end
+
+-- ---- DataText callbacks ----
+local function OnEvent(self, event, ...)
+    activePanel = self
+    GetOrCachePanelTextSetter(self)
+    UpdateDisplay(self)
+    UpdateAllDisplays()
+end
+
+local function OnClick(self, button)
+    if button == "LeftButton" then
+        local now = time()
+        local cooldown = tonumber(db_local and db_local.manualClickCooldown) or SUB.defaults.manualClickCooldown
+        if (lastManualRequest or 0) + cooldown > now then return end
+        lastManualRequest = now
+        RequestWhoQuiet()
+    end
+end
+
+local function OnEnter(self)
+    activePanel = self
+    DT:SetupTooltip(self)
+    if DT.tooltip then
+        DT.tooltip:AddLine("Online Player Count")
+        if onlineCount then
+            DT.tooltip:AddLine(("Current: |cffffffff%d|r"):format(onlineCount))
+            DT.tooltip:AddLine(" ")
+            DT.tooltip:AddLine("Session Stats")
+            if sessionMax then DT.tooltip:AddLine(("Highest: |cffffffff%d|r"):format(sessionMax)) end
+            local avg = sessionAverage()
+            if avg then DT.tooltip:AddLine(("Average: |cffffffff%d|r"):format(avg)) end
+            if sessionMin then DT.tooltip:AddLine(("Lowest: |cffffffff%d|r"):format(sessionMin)) end
+            DT.tooltip:AddLine(" ")
+            if lastUpdateTime then DT.tooltip:AddLine(("Last Updated: |cffffffff%s|r"):format(lastUpdateTime)) end
+        else
+            DT.tooltip:AddLine("Fetching...")
+        end
+        DT.tooltip:Show()
+    end
+end
+
+local function OnLeave(self)
+    if DT and DT.tooltip and DT.tooltip:IsShown() then DT.tooltip:Hide() end
+end
+
+-- ---- Driver / Ticker ----
+local function EnsureDriver()
+    if driver then return end
+    driver = CreateFrame("Frame")
+    driver:SetScript("OnEvent", function(self, event, ...)
+        if event == "WHO_LIST_UPDATE" then OnWhoListUpdate() end
+    end)
+end
+
+local function StartTicker(interval)
+    interval = tonumber(interval) or SUB.defaults.updateInterval
+    if ticker and ticker.Cancel then pcall(function() ticker:Cancel() end) end
+    ticker = nil
+    if onupdateFrame then onupdateFrame:SetScript("OnUpdate", nil); onupdateFrame:Hide(); onupdateFrame=nil; onupdateAccum=0 end
+
+    if C_Timer and C_Timer.NewTicker then
+        ticker = C_Timer.NewTicker(interval, RequestWhoQuiet)
+    elseif C_Timer and C_Timer.After then
+        local function schedule()
+            ticker = C_Timer.After(interval, function()
+                RequestWhoQuiet()
+                schedule()
+            end)
+        end
+        schedule()
+    else
+        onupdateFrame = CreateFrame("Frame")
+        onupdateFrame:Hide()
+        onupdateFrame:SetScript("OnUpdate", function(self, elapsed)
+            onupdateAccum = onupdateAccum + elapsed
+            if onupdateAccum >= interval then onupdateAccum = 0; RequestWhoQuiet() end
+        end)
+        onupdateFrame:Show()
+    end
+end
+
+local function StopTicker()
+    if ticker and ticker.Cancel then pcall(function() ticker:Cancel() end) end
+    ticker = nil
+    if onupdateFrame then onupdateFrame:SetScript("OnUpdate", nil); onupdateFrame:Hide(); onupdateFrame=nil; onupdateAccum=0 end
+end
+
+-- ---- Registration / Lifecycle ----
+DT:RegisterDatatext(REG_NAME,
+    {"PLAYER_ENTERING_WORLD"},
+    OnEvent, nil, OnClick, OnEnter, OnLeave, displayName)
+
+function SUB:OnEnable(db)
+    db_local = db or {}
+    for k, v in pairs(SUB.defaults) do if db_local[k] == nil then db_local[k] = v end end
+
+    sessionMax = nil
+    sessionMin = nil
+    sessionSum = 0
+    sessionCount = 0
+
+    EnsureDriver()
+    driver:RegisterEvent("CHAT_MSG_SYSTEM")
+    driver:RegisterEvent("WHO_LIST_UPDATE")
+    driver:RegisterEvent("PLAYER_ENTERING_WORLD")
+
+    EnsureOnShowHooks()
+
+    -- safe LibWho load/resolve
+    if type(LibStub) == "function" and not LibWho then
+        LibWho = LibStub("LibWho-3.0", true) or LibStub("LibWho-2.0", true)
+        if not LibWho and LoadAddOn then
+            local candidates = { "LibWho-3.0", "LibWho-3.0-1", "who-lib", "LibWho" }
+            for _, name in ipairs(candidates) do
+                if not LibWho then
+                    if IsAddOnLoaded and IsAddOnLoaded(name) then
+                        LibWho = LibStub("LibWho-3.0", true) or LibStub("LibWho-2.0", true)
+                    else
+                        local ok, err = pcall(function() LoadAddOn(name) end)
+                        if not ok then dbg("LoadAddOn('"..tostring(name).."') failed:", tostring(err)) end
+                        LibWho = LibStub("LibWho-3.0", true) or LibStub("LibWho-2.0", true)
+                    end
+                end
+            end
+        end
+        DetectedWhoLib = DetectExternalWhoLib()
+        if LibWho and not _G.C_FriendList and not db_local.skipCompatCheck then
+            dbg("LibWho loaded but C_FriendList nil; skipping LibWho usage (native fallback will be used).")
+            LibWho = nil
+        end
+    end
+
+    if C_Timer and C_Timer.After then
+        C_Timer.After(15, function()
+            RequestWhoQuiet()
+            StartTicker(db_local.updateInterval)
+        end)
+    else
+        RequestWhoQuiet()
+        StartTicker(db_local.updateInterval)
+    end
+
+    if DT.RegisteredDataTexts and DT.RegisteredDataTexts[REG_NAME] and DT.RegisteredDataTexts[REG_NAME].frame then
+        activePanel = DT.RegisteredDataTexts[REG_NAME].frame
+        GetOrCachePanelTextSetter(activePanel)
+        UpdateAllDisplays()
+    end
+end
+
+function SUB:OnDisable()
+    if driver then
+        driver:UnregisterEvent("CHAT_MSG_SYSTEM")
+        driver:UnregisterEvent("WHO_LIST_UPDATE")
+        driver:UnregisterEvent("PLAYER_ENTERING_WORLD")
+    end
+    StopTicker()
+    onlineCount = nil
+    lastUpdateTime = nil
+    isFetching = false
+    suppressWho = false
+    suppressedFriends = false
+    suppressedWho = false
+    friendsWasShownAtRequest = false
+    activePanel = nil
+    UpdateAllDisplays()
+end
+
+function SUB:GetOptions(db)
+    db = db or (MOD.db and MOD.db.OnlineCount or SUB.defaults)
+    for k, v in pairs(SUB.defaults) do if db[k] == nil then db[k] = v end end
+    return {
+        type = "group",
+        name = SUB.name,
+        args = {
+            debug = {
+                order = 0, type = "toggle", name = "Debug",
+                get = function() return db.debug end,
+                set = function(_, v) db.debug = v end,
+            },
+            enabled = {
+                order = 1, type = "toggle", width = "full",
+                name = function() return db.enabled and "|cff00ff00Enabled|r" or "|cffff0000Disabled|r" end,
+                get = function() return db.enabled end,
+                set = function(_, v) db.enabled = v if v then SUB:OnEnable(db) else SUB:OnDisable() end end,
+            },
+            updateInterval = {
+                order = 2, type = "range", name = "Update interval (sec)",
+                min = 10, max = 600, step = 5,
+                get = function() return db.updateInterval end,
+                set = function(_, v) db.updateInterval = tonumber(v) or SUB.defaults.updateInterval if db.enabled then StopTicker() StartTicker(db.updateInterval) end end,
+                disabled = function() return not db.enabled end,
+            },
+            manualClickCooldown = {
+                order = 3, type = "range", name = "Manual refresh cooldown (sec)",
+                min = 1, max = 60, step = 1,
+                get = function() return db.manualClickCooldown or SUB.defaults.manualClickCooldown end,
+                set = function(_, v) db.manualClickCooldown = tonumber(v) or SUB.defaults.manualClickCooldown end,
+                disabled = function() return not db.enabled end,
+            },
+            preferLibWhoOnly = {
+                order = 4, type = "toggle", name = "Prefer LibWho only (no SendWho fallback)",
+                desc = "If enabled the module will use LibWho-3.0/2.0 exclusively and will NOT fall back to native SendWho if LibWho is not available.",
+                get = function() return db.preferLibWhoOnly end,
+                set = function(_, v) db.preferLibWhoOnly = v end,
+                disabled = function() return not db.enabled end,
+            },
+        }
+    }
+end
+
+MOD:RegisterSubmodule("OnlineCount", SUB)
