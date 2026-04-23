@@ -61,7 +61,7 @@ function SUB:GetOptions(db)
             description = {
                 order = 1,
                 type = "description",
-                name = "Allows you to move ChatFrame1EditBox anywhere on your screen, just like other ElvUI movers.",
+                name = "Allows you to move ChatFrame1EditBox anywhere on your screen, just like other ElvUI movers.\n\n|cff555555Specifically made for Psychocybina|r",
             },
             enabled = {
                 order = 2,
@@ -133,17 +133,6 @@ function SUB:GetOptions(db)
                     end
                 end,
                 disabled = function() return not db.enabled end,
-            },
-            creditSpacer = {
-                order = 98,
-                type = "header",
-                name = "",
-            },
-            credit = {
-                order = 99,
-                type = "description",
-                name = "\n\n|cff888888Specifically made for Psychocybina|r",
-                fontSize = "medium",
             },
         }
     }
