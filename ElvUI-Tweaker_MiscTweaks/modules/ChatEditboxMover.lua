@@ -142,7 +142,7 @@ function SUB:GetOptions(db)
             credit = {
                 order = 99,
                 type = "description",
-                name = "|cff00ff00Specifically made for Psychocybina|r",
+                name = "\n\n|cff888888Specifically made for Psychocybina|r",
                 fontSize = "medium",
             },
         }
