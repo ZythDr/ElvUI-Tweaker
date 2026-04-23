@@ -26,6 +26,8 @@ local saved = {
     fallbackCreated = false,
     minimapScriptBackup = { OnEnter = nil, OnLeave = nil },
     minimapHooked = false,
+    frameScriptBackup = { OnEnter = nil, OnLeave = nil },
+    frameHooked = false,
     ticker = nil,
 }
 
@@ -125,7 +127,48 @@ end
 local function MinimapOnLeave(self)
     if saved.minimapScriptBackup.OnLeave then pcall(saved.minimapScriptBackup.OnLeave, self) end
     if saved.frame and saved.frame.db and saved.frame.db.onlyOnMinimapHover then
-        saved.frame:Hide()
+        if not saved.frame:IsMouseOver() then
+            saved.frame:Hide()
+        end
+    end
+end
+
+local function FrameOnEnter(self)
+    if saved.frameScriptBackup.OnEnter then pcall(saved.frameScriptBackup.OnEnter, self) end
+    if self.db and self.db.onlyOnMinimapHover then
+        self:Show()
+    end
+end
+local function FrameOnLeave(self)
+    if saved.frameScriptBackup.OnLeave then pcall(saved.frameScriptBackup.OnLeave, self) end
+    if self.db and self.db.onlyOnMinimapHover then
+        if not (NP and NP:IsMouseOver()) then
+            self:Hide()
+        end
+    end
+end
+
+local function SetupFrameHoverHook(frame, enable)
+    if not frame then return end
+    if enable then
+        if not saved.frameHooked then
+            saved.frameScriptBackup.OnEnter = frame:GetScript("OnEnter")
+            saved.frameScriptBackup.OnLeave = frame:GetScript("OnLeave")
+            frame:SetScript("OnEnter", FrameOnEnter)
+            frame:SetScript("OnLeave", FrameOnLeave)
+            saved.frameHooked = true
+        else
+            frame:SetScript("OnEnter", FrameOnEnter)
+            frame:SetScript("OnLeave", FrameOnLeave)
+        end
+    else
+        if saved.frameHooked then
+            frame:SetScript("OnEnter", saved.frameScriptBackup.OnEnter)
+            frame:SetScript("OnLeave", saved.frameScriptBackup.OnLeave)
+            saved.frameHooked = false
+            saved.frameScriptBackup.OnEnter = nil
+            saved.frameScriptBackup.OnLeave = nil
+        end
     end
 end
 
@@ -160,6 +203,7 @@ local function Cleanup()
     local gtf = FindGameTimeFrame()
     if gtf and saved.orig then RestoreOriginalState(gtf) end
     SetupMinimapHoverHook(false)
+    SetupFrameHoverHook(saved.frame, false)
     if saved.fallbackCreated and saved.frame then
         if saved.ticker and saved.ticker.Cancel then pcall(saved.ticker.Cancel, saved.ticker) end
         saved.frame:SetScript("OnUpdate", nil)
@@ -208,7 +252,15 @@ local function ApplyConfig(db)
             if gtf then SaveOriginalState(gtf) end
             pcall(frameToManage.SetParent, frameToManage, NP)
             PositionFrameToParent(frameToManage, NP, db.anchor or "TOPLEFT", db.xOffset, db.yOffset)
-            if db.onlyOnMinimapHover then SetupMinimapHoverHook(true); frameToManage:Hide() else SetupMinimapHoverHook(false); frameToManage:Show() end
+            if db.onlyOnMinimapHover then 
+                SetupMinimapHoverHook(true)
+                SetupFrameHoverHook(frameToManage, true)
+                frameToManage:Hide() 
+            else 
+                SetupMinimapHoverHook(false)
+                SetupFrameHoverHook(frameToManage, false)
+                frameToManage:Show() 
+            end
         end
     elseif db.mode == "TimeManager" then
         local tm = _G.TimeManagerFrame or TimeMgr
