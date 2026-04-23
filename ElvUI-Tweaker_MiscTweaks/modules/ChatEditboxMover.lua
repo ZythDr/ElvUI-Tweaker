@@ -134,6 +134,17 @@ function SUB:GetOptions(db)
                 end,
                 disabled = function() return not db.enabled end,
             },
+            creditSpacer = {
+                order = 98,
+                type = "header",
+                name = "",
+            },
+            credit = {
+                order = 99,
+                type = "description",
+                name = "|cff00ff00Specifically made for Psychocybina|r",
+                fontSize = "medium",
+            },
         }
     }
 end
