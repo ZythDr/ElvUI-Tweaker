@@ -4,11 +4,14 @@ local MOD = _G.EWTweaker_MiscTweaks
 if not MOD then return end
 
 local bagFrames = {
-    ["AdiBags"]     = { display = "AdiBags",     frame = "AdiBagsContainer1" },
-    ["Bagnon"]      = { display = "Bagnon",      frame = "BagnonFrame" },
-    ["Combuctor"]   = { display = "Combuctor",   frame = "CombuctorFrame" },
-    ["ArkInventory"]= { display = "ArkInventory", frame = "ARKINV_Frame1" },
-    ["Custom"]      = { display = "Custom",      frame = "" },
+    ["AdiBags"]          = { display = "AdiBags",            frame = "AdiBagsContainer1" },
+    ["Bagnon"]           = { display = "Bagnon",             frame = "BagnonFrame" },
+    ["Combuctor"]        = { display = "Combuctor",          frame = "CombuctorFrame" },
+    ["ElvUI"]            = { display = "ElvUI Bags",         frame = "ElvUI_ContainerFrame" },
+    ["ArkInventory"]     = { display = "ArkInventory",       frame = "ARKINV_Frame1" },
+    ["OneBag3"]          = { display = "OneBag3",            frame = "OneBagFrame" },
+    ["GudaBags"]         = { display = "GudaBags",           frame = "Guda_BagFrame" },
+    ["Custom"]           = { display = "Custom",             frame = "" },
 }
 
 local anchorPoints = {

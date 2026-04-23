@@ -32,3 +32,9 @@ L["Bottom"] = "Bottom"
 L["When enabled, anchors the tooltip to the selected point of the specified frame if it is visible."] = "When enabled, anchors the tooltip to the selected point of the specified frame if it is visible."
 L["Enable custom tooltip anchoring."] = "Enable custom tooltip anchoring."
 L["Disabling this option reverts to ElvUI's default tooltip behavior."] = "Disabling this option reverts to ElvUI's default tooltip behavior."
+
+-- Chat Editbox Mover
+L["Chat Editbox Mover"] = "Chat Editbox Mover"
+L["Allows you to move ChatFrame1EditBox anywhere on your screen, just like other ElvUI movers."] = "Allows you to move ChatFrame1EditBox anywhere on your screen, just like other ElvUI movers."
+L["Lock Position"] = "Lock Position"
+L["Lock the editbox in place (disable dragging)."] = "Lock the editbox in place (disable dragging)."

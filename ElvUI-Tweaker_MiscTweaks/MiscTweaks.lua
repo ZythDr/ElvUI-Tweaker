@@ -1,11 +1,15 @@
-local core = EWTweaker and EWTweaker.GetCore and EWTweaker.GetCore()
-if not core then return end
-print("|cff00ff00[MiscTweaks]|r MiscTweaks.lua running")
 
+local core = EWTweaker and EWTweaker.GetCore and EWTweaker.GetCore()
 local L = LibStub("AceLocale-3.0-ElvUI"):GetLocale("ElvUI", true)
 if not L then L = setmetatable({}, { __index = function(t, k) return k end }) end
 
 local MOD = {}
+_G.EWTweaker_MiscTweaks = MOD
+
+if not core then return end
+print("|cff00ff00[MiscTweaks]|r MiscTweaks.lua running")
+
+-- L and MOD now defined above
 MOD.name = L["MiscTweaks"]
 -- Ensure all submodules have empty tables in defaults for proper DB handoff
 MOD.defaults = {
@@ -14,7 +18,8 @@ MOD.defaults = {
     PortraitFix = {},
     PortraitDiag = {},
     ThreatColors = {},
-    GameTimeDisplay = {} -- ADD THIS LINE for proper DB persistence!
+    GameTimeDisplay = {},
+    ChatEditboxMover = {},
 }
 MOD.submodules = {}
 
@@ -67,4 +72,4 @@ end)
 
 core:RegisterModule("MiscTweaks", MOD, MOD.defaults)
 
-_G.EWTweaker_MiscTweaks = MOD
+-- Already set at the top
