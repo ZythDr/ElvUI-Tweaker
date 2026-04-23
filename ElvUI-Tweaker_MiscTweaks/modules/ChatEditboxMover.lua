@@ -42,7 +42,8 @@ local function EnsureHolder(db)
         holder:SetPoint("BOTTOM", E.UIParent or UIParent, "BOTTOM", 0, 300) -- Default position
 
         if not holder.mover then
-            E:CreateMover(holder, "EWTweaker_ChatEditboxMover", "Chat Editbox", nil, nil, nil, "ALL,GENERAL", nil, "Tweaker,MiscTweaks,ChatEditboxMover")
+            E:CreateMover(holder, "EWTweaker_ChatEditboxMover", "Chat Editbox", nil, nil, nil, "ALL,GENERAL", nil,
+                "Tweaker,MiscTweaks,ChatEditboxMover")
         end
     end
     return holder
@@ -61,7 +62,8 @@ function SUB:GetOptions(db)
             description = {
                 order = 1,
                 type = "description",
-                name = "Allows you to move ChatFrame1EditBox anywhere on your screen, just like other ElvUI movers.\n\n|cff555555Specifically made for Psychocybina|r",
+                name =
+                "Allows moving the Chat Editbox anywhere on your screen, use /moveui to move it. |cff333333Made for Psychocybina|r",
             },
             enabled = {
                 order = 2,
@@ -78,7 +80,9 @@ function SUB:GetOptions(db)
                 order = 3,
                 type = "range",
                 name = "Width",
-                min = 100, max = 1000, step = 1,
+                min = 100,
+                max = 1000,
+                step = 1,
                 get = function() return db.width or 320 end,
                 set = function(_, val)
                     db.width = val
@@ -90,7 +94,9 @@ function SUB:GetOptions(db)
                 order = 4,
                 type = "range",
                 name = "Height",
-                min = 20, max = 100, step = 1,
+                min = 20,
+                max = 100,
+                step = 1,
                 get = function() return db.height or 32 end,
                 set = function(_, val)
                     db.height = val
@@ -103,7 +109,9 @@ function SUB:GetOptions(db)
                 type = "range",
                 name = "Scale",
                 desc = "Set the scale of the chat editbox.",
-                min = 0.5, max = 2.0, step = 0.05,
+                min = 0.5,
+                max = 2.0,
+                step = 0.05,
                 get = function() return db.scale or 1.0 end,
                 set = function(_, val)
                     db.scale = val
@@ -121,13 +129,14 @@ function SUB:GetOptions(db)
                 order = 6,
                 type = "select",
                 name = "Frame Strata",
-                desc = "Set the frame strata level of the chat editbox to control whether it appears above or below other UI elements (like ElvUI options).",
+                desc =
+                "Set the frame strata level of the chat editbox to control whether it appears above or below other UI elements (like ElvUI options).",
                 values = STRATA_LEVELS,
                 get = function() return db.strataLevel or 5 end,
                 set = function(_, val)
                     db.strataLevel = val
                     local strata = STRATA_LEVELS[val] or "DIALOG"
-                    if editbox then 
+                    if editbox then
                         editbox:SetFrameStrata(strata)
                         editbox:SetFrameLevel(205)
                     end
@@ -148,7 +157,7 @@ function SUB:EnforcePosition(db)
         editbox:ClearAllPoints()
         editbox:SetAllPoints(h)
         h:SetScale((db and db.scale) or 1.0)
-        
+
         local strata = STRATA_LEVELS[db and db.strataLevel or 5] or "DIALOG"
         editbox:SetFrameStrata(strata)
         editbox:SetFrameLevel(205)
@@ -159,7 +168,7 @@ function SUB:ApplyEnabled(db)
     if not editbox then return end
     local h = EnsureHolder(db)
     if not h then return end
-    
+
     if E and E:GetModule('Chat') and not isHooked then
         local CH = E:GetModule('Chat')
         hooksecurefunc(CH, "UpdateAnchors", function()
@@ -191,21 +200,11 @@ function SUB:UpdateSize(db)
 end
 
 function SUB:DisableMover()
-    if not E then return end
-    local CH = E:GetModule('Chat')
-    -- Re-run ElvUI's chat anchors update to restore standard position
-    if CH and CH.UpdateAnchors then
-        -- Temporarily clear our enabled flag so the hook doesn't override it immediately
-        local originalHook = isHooked
-        isHooked = false -- to prevent our hook from forcing it back if we call UpdateAnchors
-        -- wait, our hook checks db.enabled. Since we just set it to false, our hook does nothing.
-        isHooked = originalHook
-        CH:UpdateAnchors()
+    if not E then
+        if ElvUI and ElvUI[1] then E = ElvUI[1] end
     end
-    if editbox then
-        editbox:SetParent(UIParent)
-        editbox:ClearAllPoints()
-        editbox:SetPoint("BOTTOMLEFT", ChatFrame1, "TOPLEFT", 0, 0)
+    if E and E.StaticPopup_Show then
+        E:StaticPopup_Show("GLOBAL_RL")
     end
 end
 
@@ -219,4 +218,3 @@ eventFrame:SetScript("OnEvent", function()
 end)
 
 MOD:RegisterSubmodule("ChatEditboxMover", SUB)
-
