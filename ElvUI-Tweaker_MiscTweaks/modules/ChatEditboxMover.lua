@@ -208,13 +208,6 @@ function SUB:DisableMover()
     end
 end
 
--- Initialize the holder silently if it's supposed to be registered, but do it safely
-local eventFrame = CreateFrame("Frame")
-eventFrame:RegisterEvent("PLAYER_LOGIN")
-eventFrame:SetScript("OnEvent", function()
-    -- Create the mover so it's always available in the ElvUI movers list if needed
-    local db = MOD.defaults.ChatEditboxMover or {}
-    EnsureHolder(db)
-end)
+-- Mover is created dynamically in EnsureHolder when enabled.
 
 MOD:RegisterSubmodule("ChatEditboxMover", SUB)
