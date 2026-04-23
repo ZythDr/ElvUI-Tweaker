@@ -2,7 +2,7 @@
 ## Title: ElvUI-Tweaker
 ## Notes: Tweaks and adjustments for ElvUI-WotLK
 ## Author: ZythDr
-## Version: 1.0
+## Version: 1.1
 ## RequiredDeps: ElvUI
 ## SavedVariables: ElvUI_WotLK_TweakerDB
 ## SavedVariablesPerCharacter: ElvUI_WotLK_TweakerDBPC

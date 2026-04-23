@@ -2,7 +2,7 @@
 ## Title: ElvUI Tweaker: MiscTweaks
 ## Notes: Miscellaneous tweaks for ElvUI-WotLK.
 ## Author: ZythDr
-## Version: 1.0
+## Version: 1.1
 ## RequiredDeps: ElvUI-Tweaker, ElvUI
 ## Dependencies: ElvUI
 ## OptionalDeps: ElvUI_AddOnSkins
