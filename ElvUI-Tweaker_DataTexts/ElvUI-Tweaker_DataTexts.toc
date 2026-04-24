@@ -2,7 +2,7 @@
 ## Title: ElvUI Tweaker: DataTexts
 ## Notes: Collection of ElvUI DataText modules including Gold icon scaling, Movement Speed, and Online Count.
 ## Author: ZythDr
-## Version: 1.1
+## Version: 1.2
 ## RequiredDeps: ElvUI-Tweaker, ElvUI
 ## Dependencies: ElvUI
 

@@ -7,4 +7,5 @@
     <Script file="..\modules\ShapeshiftRemover.lua"/>
     <!-- Add other modules below in the order you want them loaded -->
     <Script file="..\modules\ChatEditboxMover.lua"/>
+    <Script file="..\modules\VendorTweaks.lua"/>
 </Ui>

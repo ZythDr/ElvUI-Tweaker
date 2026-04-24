@@ -20,6 +20,7 @@ MOD.defaults = {
     ThreatColors = {},
     GameTimeDisplay = {},
     ChatEditboxMover = {},
+    VendorTweaks = {},
 }
 MOD.submodules = {}
 

@@ -12,6 +12,11 @@ The addon is split into different packages so you only load what you need. Right
 
 A collection of general interface improvements:
 
+- **Vendor Tweaks:** Replaces the default 10-item grid merchant layout with a compact, scrollable list view. Inspired by GnomishVendorShrinker.
+  - **Currency Display**: Dynamically shows relevant currencies (Honor, Arena Points, Tokens) in a skinned tab at the top of the window.
+  - **Alternate Rows**: Subtle row highlighting for easier item scanning.
+  - **Adjustable Layout**: Change how many items are visible (8-16) to suit your preference.
+
 - **Chat Editbox Mover:** Detaches the chat typing box from the main chat window so you can place it anywhere on your screen.
 - **Five Second Rule:** Adds a visual "spark" to the Player UnitFrame's power/mana bar that tracks your mana regeneration ticks, and visualizes the 5-second delay before natural mana regeneration resumes after casting a spell.
 - **Tooltip Anchor:** This module lets you attach the in-game tooltip to various bag addons to avoid having the tooltip overlapping the bag frames.
