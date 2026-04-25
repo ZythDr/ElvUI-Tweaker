@@ -49,6 +49,7 @@ Tweaks and additions to ElvUI's DataTexts:
 ## Installation & Usage
 
 1. Download or clone the repository.
-2. Move the `ElvUI-Tweaker` folder along with `ElvUI-Tweaker_DataTexts` and `ElvUI-Tweaker_MiscTweaks` folders into your `WoW/Interface/AddOns` directory.
+2. Extract `ElvUI-Tweaker-main` and open the extracted folder
+2. Inside of `ElvUI-Tweaker-main`, move the `ElvUI-Tweaker` folder along with `ElvUI-Tweaker_DataTexts` and `ElvUI-Tweaker_MiscTweaks` folders into your `WoW/Interface/AddOns` directory.
 3. Restart WoW
 4. Once in-game, you can configure ElvUI-Tweaker via `/ec` and looking for the **ElvUI Tweaker** tab on the left side. From there, you can enable, disable, and tweak any and all modules to your liking.
