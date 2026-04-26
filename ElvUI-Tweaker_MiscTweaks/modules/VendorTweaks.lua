@@ -453,6 +453,7 @@ local function BuildUI()
     f:Hide()
 
     local scrollbar = CreateFrame("Slider", "EWT_VendorTweaksScroll", f, "UIPanelScrollBarTemplate")
+    scrollbar:SetScript("OnValueChanged", nil)
     scrollbar:SetWidth(18)
     scrollbar:SetPoint("TOPRIGHT", f, "TOPRIGHT", -3, -19)
     scrollbar:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -3, 19)
