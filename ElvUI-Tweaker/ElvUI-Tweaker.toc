@@ -2,7 +2,7 @@
 ## Title: |cff1784d1E|r|cffe5e3e3lvUI|r |cff1784d1T|r|cffe5e3e3weaker|r
 ## Notes: Tweaks and adjustments for ElvUI-WotLK
 ## Author: ZythDr
-## Version: 1.2.1
+## Version: 1.3.0
 ## RequiredDeps: ElvUI
 ## SavedVariables: ElvUI_WotLK_TweakerDB
 ## SavedVariablesPerCharacter: ElvUI_WotLK_TweakerDBPC

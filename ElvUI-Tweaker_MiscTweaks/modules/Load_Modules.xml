@@ -8,4 +8,5 @@
     <!-- Add other modules below in the order you want them loaded -->
     <Script file="..\modules\ChatEditboxMover.lua"/>
     <Script file="..\modules\VendorTweaks.lua"/>
+    <Script file="..\modules\BagSwap.lua"/>
 </Ui>

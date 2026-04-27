@@ -21,6 +21,7 @@ MOD.defaults = {
     GameTimeDisplay = {},
     ChatEditboxMover = {},
     VendorTweaks = {},
+    BagSwap = {},
 }
 MOD.submodules = {}
 
