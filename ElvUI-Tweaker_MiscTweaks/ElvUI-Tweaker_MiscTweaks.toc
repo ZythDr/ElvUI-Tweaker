@@ -1,5 +1,5 @@
 ## Interface: 30300
-## Title: ElvUI Tweaker: MiscTweaks
+## Title: |cff1784d1E|r|cffe5e3e3lvUI|r |cff1784d1T|r|cffe5e3e3weaker|r |cff1784d1M|r|cffe5e3e3isc|r|cff1784d1T|r|cffe5e3e3weaks|r
 ## Notes: Miscellaneous tweaks for ElvUI-WotLK.
 ## Author: ZythDr
 ## Version: 1.2.1
