@@ -9,4 +9,5 @@
     <Script file="..\modules\ChatEditboxMover.lua"/>
     <Script file="..\modules\VendorTweaks.lua"/>
     <Script file="..\modules\BagSwap.lua"/>
+    <Script file="..\modules\MicrobarTweaks.lua"/>
 </Ui>
