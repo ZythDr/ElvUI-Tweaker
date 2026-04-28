@@ -23,9 +23,8 @@ A collection of general interface improvements:
   - **Smart Layout**: Automatically adjusts bar width and prevents row wrapping, even when exceeding the native 10-button limit.
   - **Dynamic Animations**: Includes a synced, animated eye for the LFG integration that mimics the modern WoW experience.
 
-- **Bag Swap:** Automates the tedious process of upgrading your equipped bags.
-  - **Smart Replacement**: When you have a new bag on your cursor and click an equipped bag, the module automatically moves all items from the old bag into your free inventory/bank slots.
-  - **Zero-Error Handshake**: Once the bag is cleared, it automatically swaps in the new bag from your cursor, eliminating the annoying "You can't replace a bag that is not empty" error message.
+- **Bag Swap:** Simplifies the process of replacing equipped bags.
+  - **Automatic Emptying**: When replacing a bag, this module automatically moves its contents to your free inventory slots, then equips the new bag.
 
 - **Chat Editbox Mover:** Detaches the chat typing box from the main chat window so you can place it anywhere on your screen.
 - **Five Second Rule:** Adds a visual "spark" to the Player UnitFrame's power/mana bar that tracks your mana regeneration ticks, and visualizes the 5-second delay before natural mana regeneration resumes after casting a spell.
@@ -60,6 +59,6 @@ Tweaks and additions to ElvUI's DataTexts:
 
 1. Download or clone the repository.
 2. Extract `ElvUI-Tweaker-main` and open the extracted folder
-2. Inside of `ElvUI-Tweaker-main`, move the `ElvUI-Tweaker` folder along with `ElvUI-Tweaker_DataTexts` and `ElvUI-Tweaker_MiscTweaks` folders into your `WoW/Interface/AddOns` directory.
-3. Restart WoW
-4. Once in-game, you can configure ElvUI-Tweaker via `/ec` and looking for the **ElvUI Tweaker** tab on the left side. From there, you can enable, disable, and tweak any and all modules to your liking.
+3. Inside of `ElvUI-Tweaker-main`, move the `ElvUI-Tweaker` folder along with `ElvUI-Tweaker_DataTexts` and `ElvUI-Tweaker_MiscTweaks` folders into your `WoW/Interface/AddOns` directory.
+4. Restart WoW
+5. Once in-game, you can configure ElvUI-Tweaker via `/ec` and looking for the **ElvUI Tweaker** tab on the left side. From there, you can enable, disable, and tweak any and all modules to your liking.
