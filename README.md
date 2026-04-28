@@ -19,9 +19,8 @@ A collection of general interface improvements:
 
 - **Microbar Tweaks:** A universal microbar editor to declutter and customize your shortcut bar.
   - **Granular Visibility**: Toggle any of the 10 native buttons (Character, Spellbook, PVP, etc.) on or off individually via a checklist.
-  - **Custom Shortcuts**: Replace any native button—or add a new 11th button—with a high-fidelity LFG Integration or Mount Journal shortcut.
-  - **Smart Layout**: Automatically adjusts bar width and prevents row wrapping, even when exceeding the native 10-button limit.
-  - **Dynamic Animations**: Includes a synced, animated eye for the LFG integration that mimics the modern WoW experience.
+  - **Custom Shortcuts**: Replace any native button—or add a new 11th button—with a button for LFG Addon integration or a Mount Journal shortcut.
+  - **Dynamic Animations**: Includes a synced, animated eye for the LFG addon that mimics the native LFD/Dungeon Finder animation.
 
 - **Bag Swap:** Simplifies the process of replacing equipped bags.
   - **Automatic Emptying**: When replacing a bag, this module automatically moves its contents to your free inventory slots, then equips the new bag.
