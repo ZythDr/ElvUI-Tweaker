@@ -17,6 +17,16 @@ A collection of general interface improvements:
   - **Alternate Rows**: Subtle row highlighting for easier item scanning.
   - **Adjustable Layout**: Change how many items are visible (8-16) to suit your preference.
 
+- **Microbar Tweaks:** A universal microbar editor to declutter and customize your shortcut bar.
+  - **Granular Visibility**: Toggle any of the 10 native buttons (Character, Spellbook, PVP, etc.) on or off individually via a checklist.
+  - **Custom Shortcuts**: Replace any native button—or add a new 11th button—with a high-fidelity LFG Integration or Mount Journal shortcut.
+  - **Smart Layout**: Automatically adjusts bar width and prevents row wrapping, even when exceeding the native 10-button limit.
+  - **Dynamic Animations**: Includes a synced, animated eye for the LFG integration that mimics the modern WoW experience.
+
+- **Bag Swap:** Automatically switches your equipped bags based on your current location or activity.
+  - **Context-Aware Switching**: Swap to a profession-specific bag (like Mining or Herbalism) when out in the world, and back to a general-purpose bag when entering a Capital City or Dungeon.
+  - **Inventory Optimization**: Ensures you always have the right storage type for the task at hand without manual swapping.
+
 - **Chat Editbox Mover:** Detaches the chat typing box from the main chat window so you can place it anywhere on your screen.
 - **Five Second Rule:** Adds a visual "spark" to the Player UnitFrame's power/mana bar that tracks your mana regeneration ticks, and visualizes the 5-second delay before natural mana regeneration resumes after casting a spell.
 - **Tooltip Anchor:** This module lets you attach the in-game tooltip to various bag addons to avoid having the tooltip overlapping the bag frames.
