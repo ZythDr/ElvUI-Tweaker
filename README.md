@@ -23,9 +23,9 @@ A collection of general interface improvements:
   - **Smart Layout**: Automatically adjusts bar width and prevents row wrapping, even when exceeding the native 10-button limit.
   - **Dynamic Animations**: Includes a synced, animated eye for the LFG integration that mimics the modern WoW experience.
 
-- **Bag Swap:** Automatically switches your equipped bags based on your current location or activity.
-  - **Context-Aware Switching**: Swap to a profession-specific bag (like Mining or Herbalism) when out in the world, and back to a general-purpose bag when entering a Capital City or Dungeon.
-  - **Inventory Optimization**: Ensures you always have the right storage type for the task at hand without manual swapping.
+- **Bag Swap:** Automates the tedious process of upgrading your equipped bags.
+  - **Smart Replacement**: When you have a new bag on your cursor and click an equipped bag, the module automatically moves all items from the old bag into your free inventory/bank slots.
+  - **Zero-Error Handshake**: Once the bag is cleared, it automatically swaps in the new bag from your cursor, eliminating the annoying "You can't replace a bag that is not empty" error message.
 
 - **Chat Editbox Mover:** Detaches the chat typing box from the main chat window so you can place it anywhere on your screen.
 - **Five Second Rule:** Adds a visual "spark" to the Player UnitFrame's power/mana bar that tracks your mana regeneration ticks, and visualizes the 5-second delay before natural mana regeneration resumes after casting a spell.
