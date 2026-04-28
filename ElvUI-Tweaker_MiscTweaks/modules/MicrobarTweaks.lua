@@ -8,11 +8,9 @@ local SUB = { name = "Microbar Tweaks" }
 
 SUB.defaults = {
     enabled = true,
-    selection_gap = true,
     selection_custom = true,
-    hideTarget = "LFDMicroButton",
-    replaceTarget = "LFDMicroButton", -- "NONE" for extra
     customType = "LFG",
+    replaceTarget = "LFDMicroButton",
     visibility = {
         CharacterMicroButton = true,
         SpellbookMicroButton = true,
@@ -130,17 +128,15 @@ local function UpdateLayout()
             pushed:SetAllPoints()
         end
 
+        customButton:RegisterForClicks("AnyUp")
         customButton:SetScript("OnClick", function()
             if isLFG then
                 if _G.LFG_Toggle then
                     _G.LFG_Toggle()
+                elseif _G.SlashCmdList["LFG"] then
+                    _G.SlashCmdList["LFG"]("")
                 elseif _G.LFGParentFrame then
-                    if _G.LFGParentFrame:IsShown() then
-                        HideUIPanel(_G.LFGParentFrame)
-                    else
-                        ShowUIPanel(_G
-                            .LFGParentFrame)
-                    end
+                    if _G.LFGParentFrame:IsShown() then _G.LFGParentFrame:Hide() else _G.LFGParentFrame:Show() end
                 end
             elseif isMount then
                 ToggleCharacter("PetPaperDollFrame")
@@ -151,22 +147,32 @@ local function UpdateLayout()
         customButton:SetScript("OnEnter", function(self)
             if self.backdrop then self.backdrop:SetBackdropBorderColor(unpack(E.media.rgbvaluecolor)) end
             if isLFG then
+                -- Hijack SetOwner temporarily to force our anchor
+                local oldSetOwner = GameTooltip.SetOwner
+                GameTooltip.SetOwner = function(s, owner, anchor)
+                    oldSetOwner(s, owner, "ANCHOR_NONE")
+                end
+
                 if LFG_ShowMinimap then
                     local oldThis = _G.this; _G.this = self; LFG_ShowMinimap(); _G.this = oldThis
+                else
+                    GameTooltip:SetOwner(self, "ANCHOR_NONE")
+                    GameTooltip:AddLine("LFG - Dungeon Group Finder", 1, 1, 1)
                 end
-                -- Precision Anchor: Bottom-Right of tooltip to Top-Right of button
-                GameTooltip:SetOwner(self, "ANCHOR_NONE")
+
+                -- Restore original SetOwner
+                GameTooltip.SetOwner = oldSetOwner
+
+                -- Precision Anchor: Bottom-Left of tooltip to Top-Right of button
                 GameTooltip:ClearAllPoints()
                 GameTooltip:SetPoint("BOTTOMLEFT", self, "TOPRIGHT", 0, 0)
-                GameTooltip:AddLine("LFG - Dungeon Group Finder", 1, 1, 1)
                 GameTooltip:Show()
 
                 if LFGGroupStatus and LFGGroupStatus:IsShown() then
                     LFGGroupStatus:ClearAllPoints()
-                    LFGGroupStatus:Point("BOTTOMLEFT", self, "TOPRIGHT", 0, 10)
+                    LFGGroupStatus:Point("BOTTOMLEFT", self, "TOPRIGHT", 0, 0)
                 end
             elseif isMount then
-                -- Match anchor for consistency
                 GameTooltip:SetOwner(self, "ANCHOR_NONE")
                 GameTooltip:ClearAllPoints()
                 GameTooltip:SetPoint("BOTTOMLEFT", self, "TOPRIGHT", 0, 0)
@@ -476,19 +482,32 @@ watcher:SetScript("OnEvent", function(self)
     end
 
     local elapsed = 0
+    local lastUpdate = 0
     local sliderUnlocked = false
     self:SetScript("OnUpdate", function(s, e)
         elapsed = elapsed + e
 
-        -- Try to unlock the slider until it works (options might load late)
-        if not sliderUnlocked then
-            sliderUnlocked = UnlockSlider()
-        end
+        -- High-frequency updates for the first 2 seconds (every 0.1s)
+        -- Normal frequency for the next 3 seconds (every 1.0s)
+        local interval = elapsed < 2 and 0.1 or 1.0
 
-        -- Run layout update every second for 5 seconds to ensure stability
-        if elapsed > 1 then
+        if (elapsed - lastUpdate) > interval then
+            lastUpdate = elapsed
+
+            -- Try to unlock the slider
+            if not sliderUnlocked then
+                sliderUnlocked = UnlockSlider()
+            end
+
+            -- Aggressively re-apply layout and settings
+            local currentDB = GetDB()
+            if currentDB and currentDB.enabled then
+                SUB:ApplyEnabled(currentDB)
+            end
             UpdateLayout()
-            if elapsed > 5 and sliderUnlocked then
+
+            -- Stop after 5 seconds if slider is unlocked, or force stop at 10s
+            if elapsed > 5 and (sliderUnlocked or elapsed > 10) then
                 s:SetScript("OnUpdate", nil)
             end
         end
