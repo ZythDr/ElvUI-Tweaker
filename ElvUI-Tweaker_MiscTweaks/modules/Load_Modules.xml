@@ -1,13 +1,12 @@
 <Ui xmlns="http://www.blizzard.com/wow/ui/">
-    <!-- Modules loader for MiscTweaks.  Add new module <Script file="..\modules\YourModule.lua"/> entries here. -->
-    <Script file="..\modules\EmbedTweaks.lua"/>
-    <Script file="..\modules\FiveSecondRule.lua"/>
-    <Script file="..\modules\GameTimeDisplay.lua"/>
-    <Script file="..\modules\TooltipAnchor.lua"/>
-    <Script file="..\modules\ShapeshiftRemover.lua"/>
-    <!-- Add other modules below in the order you want them loaded -->
-    <Script file="..\modules\ChatEditboxMover.lua"/>
-    <Script file="..\modules\VendorTweaks.lua"/>
-    <Script file="..\modules\BagSwap.lua"/>
-    <Script file="..\modules\MicrobarTweaks.lua"/>
+    <!-- Modules loader for MiscTweaks. -->
+    <Script file="EmbedTweaks.lua"/>
+    <Script file="FiveSecondRule.lua"/>
+    <Script file="GameTimeDisplay.lua"/>
+    <Script file="TooltipAnchor.lua"/>
+    <Script file="ShapeshiftRemover.lua"/>
+    <Script file="ChatEditboxMover.lua"/>
+    <Script file="VendorTweaks.lua"/>
+    <Script file="BagSwap.lua"/>
+    <Script file="MicrobarTweaks.lua"/>
 </Ui>

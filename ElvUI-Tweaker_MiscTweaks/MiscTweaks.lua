@@ -22,7 +22,7 @@ MOD.defaults = {
     ChatEditboxMover = {},
     VendorTweaks = {},
     BagSwap = {},
-    MicrobarTweaks = {},
+    MicrobarTweaks = { enabled = true, fixGap = false, customButton = false },
 }
 MOD.submodules = {}
 
