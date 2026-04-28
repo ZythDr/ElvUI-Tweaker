@@ -46,12 +46,12 @@ local MICRO_BUTTONS = {
 -- Coordinate Presets
 local COORDS = {
     LFG = {
-        normal = {0.17, 0.83, 0.05, 1.0},
-        pushed = {0.20, 0.86, 0.02, 0.97},
+        normal = { 0.17, 0.83, 0.05, 1.0 },
+        pushed = { 0.20, 0.86, 0.02, 0.97 },
     },
     MOUNT = {
-        normal = {0.19, 0.91, 0.05, 1.0},
-        pushed = {0.22, 0.94, 0.02, 0.97},
+        normal = { 0.19, 0.91, 0.05, 1.0 },
+        pushed = { 0.22, 0.94, 0.02, 0.97 },
     }
 }
 
@@ -94,7 +94,7 @@ local function UpdateLayout()
     local offset = E:Scale(E.PixelMode and 1 or 3)
     local spacing = E:Scale(offset + db.buttonSpacing)
     local buttonsPerRow = db.buttonsPerRow
-    -- If we are adding an extra button and the row is at the native max (10), 
+    -- If we are adding an extra button and the row is at the native max (10),
     -- bump it to 11 internally to prevent the extra button from wrapping to a new row.
     if isCustom and replaceTarget == "NONE" and buttonsPerRow >= 10 then
         buttonsPerRow = buttonsPerRow + 1
@@ -113,26 +113,65 @@ local function UpdateLayout()
     -- Setup custom button properties if it exists
     if isCustom and customButton then
         customButton:Size(db.buttonSize, db.buttonSize * 1.4)
-        local icon = isLFG and "Interface\\Addons\\LFG\\images\\eye\\battlenetworking0" or (isMount and "Interface\\AddOns\\ElvUI-Tweaker_MiscTweaks\\media\\MountJournalPortrait" or "Interface\\Icons\\INV_Misc_QuestionMark")
+        local icon = isLFG and "Interface\\Addons\\LFG\\images\\eye\\battlenetworking0" or
+            (isMount and "Interface\\AddOns\\ElvUI-Tweaker_MiscTweaks\\media\\MountJournalPortrait" or "Interface\\Icons\\INV_Misc_QuestionMark")
         local m = isMount and "MOUNT" or "LFG"
 
         local normal = customButton:GetNormalTexture()
-        if normal then normal:SetTexture(icon) ApplyTexCoords(normal, m, false) end
+        if normal then
+            normal:SetTexture(icon)
+            ApplyTexCoords(normal, m, false)
+        end
         local pushed = customButton:GetPushedTexture()
-        if pushed then pushed:SetTexture(icon) ApplyTexCoords(pushed, m, true) pushed:SetVertexColor(0.5,0.5,0.5) pushed:SetAllPoints() end
+        if pushed then
+            pushed:SetTexture(icon)
+            ApplyTexCoords(pushed, m, true)
+            pushed:SetVertexColor(0.5, 0.5, 0.5)
+            pushed:SetAllPoints()
+        end
 
         customButton:SetScript("OnClick", function()
-            if isLFG and LFG_Toggle then LFG_Toggle()
-            elseif isMount then ToggleCharacter("PetPaperDollFrame") if PetPaperDollFrame_SetTab then PetPaperDollFrame_SetTab(3) end end
+            if isLFG then
+                if _G.LFG_Toggle then
+                    _G.LFG_Toggle()
+                elseif _G.LFGParentFrame then
+                    if _G.LFGParentFrame:IsShown() then
+                        HideUIPanel(_G.LFGParentFrame)
+                    else
+                        ShowUIPanel(_G
+                            .LFGParentFrame)
+                    end
+                end
+            elseif isMount then
+                ToggleCharacter("PetPaperDollFrame")
+                if PetPaperDollFrame_SetTab then PetPaperDollFrame_SetTab(3) end
+            end
         end)
-        
+
         customButton:SetScript("OnEnter", function(self)
             if self.backdrop then self.backdrop:SetBackdropBorderColor(unpack(E.media.rgbvaluecolor)) end
-            if isLFG and LFG_ShowMinimap then
-                local oldThis = _G.this; _G.this = self; LFG_ShowMinimap(); _G.this = oldThis
-                if LFGGroupStatus and LFGGroupStatus:IsShown() then LFGGroupStatus:ClearAllPoints() LFGGroupStatus:Point("BOTTOMLEFT", self, "TOPRIGHT", 0, 5) end
+            if isLFG then
+                if LFG_ShowMinimap then
+                    local oldThis = _G.this; _G.this = self; LFG_ShowMinimap(); _G.this = oldThis
+                end
+                -- Precision Anchor: Bottom-Right of tooltip to Top-Right of button
+                GameTooltip:SetOwner(self, "ANCHOR_NONE")
+                GameTooltip:ClearAllPoints()
+                GameTooltip:SetPoint("BOTTOMLEFT", self, "TOPRIGHT", 0, 0)
+                GameTooltip:AddLine("LFG - Dungeon Group Finder", 1, 1, 1)
+                GameTooltip:Show()
+
+                if LFGGroupStatus and LFGGroupStatus:IsShown() then
+                    LFGGroupStatus:ClearAllPoints()
+                    LFGGroupStatus:Point("BOTTOMLEFT", self, "TOPRIGHT", 0, 10)
+                end
             elseif isMount then
-                GameTooltip:SetOwner(self, "ANCHOR_TOPRIGHT", 0, 5) GameTooltip:AddLine("Mount Journal") GameTooltip:Show()
+                -- Match anchor for consistency
+                GameTooltip:SetOwner(self, "ANCHOR_NONE")
+                GameTooltip:ClearAllPoints()
+                GameTooltip:SetPoint("BOTTOMLEFT", self, "TOPRIGHT", 0, 0)
+                GameTooltip:AddLine("Mount Journal", 1, 1, 1)
+                GameTooltip:Show()
             end
         end)
         customButton:SetScript("OnLeave", function(self)
@@ -144,7 +183,14 @@ local function UpdateLayout()
         if isLFG then
             customButton:SetScript("OnUpdate", function(self, elapsed)
                 if not LFG_Internal and _G.findGroup and debug and debug.getupvalue then
-                    local i = 1; while true do local n, v = debug.getupvalue(_G.findGroup, i); if not n then break end if n == "LFG" then LFG_Internal = v break end i = i + 1 end
+                    local i = 1; while true do
+                        local n, v = debug.getupvalue(_G.findGroup, i); if not n then break end
+                        if n == "LFG" then
+                            LFG_Internal = v
+                            break
+                        end
+                        i = i + 1
+                    end
                 end
 
                 local isQueued = LFG_Internal and (LFG_Internal.findingGroup or LFG_Internal.findingMore)
@@ -174,9 +220,17 @@ local function UpdateLayout()
                 lastTexture = texture
 
                 local normal = self:GetNormalTexture()
-                if normal then normal:SetTexture(texture) ApplyTexCoords(normal, "LFG", false) end
+                if normal then
+                    normal:SetTexture(texture)
+                    ApplyTexCoords(normal, "LFG", false)
+                end
                 local pushed = self:GetPushedTexture()
-                if pushed then pushed:SetTexture(texture) ApplyTexCoords(pushed, "LFG", true) pushed:SetVertexColor(0.5, 0.5, 0.5) pushed:SetAllPoints() end
+                if pushed then
+                    pushed:SetTexture(texture)
+                    ApplyTexCoords(pushed, "LFG", true)
+                    pushed:SetVertexColor(0.5, 0.5, 0.5)
+                    pushed:SetAllPoints()
+                end
             end)
         else
             customButton:SetScript("OnUpdate", nil)
@@ -294,7 +348,8 @@ function SUB:GetOptions(db)
             description = {
                 order = 1,
                 type = "description",
-                name = "Advanced tweaks for the ElvUI microbar. Use the checklist below to hide any unwanted buttons, or replace a button with a custom LFG/Mount shortcut.\n",
+                name =
+                "Advanced tweaks for the ElvUI microbar. Use the checklist below to hide any unwanted buttons, or replace a button with a custom LFG/Mount shortcut.\n",
             },
             enabled = {
                 order = 2,
@@ -326,7 +381,7 @@ function SUB:GetOptions(db)
                     MainMenuMicroButton = { order = 9, type = "toggle", name = "Main Menu" },
                     HelpMicroButton = { order = 10, type = "toggle", name = "Help" },
                 },
-                get = function(info) 
+                get = function(info)
                     if not db.visibility then db.visibility = {} end
                     local val = db.visibility[info[#info]]
                     return val == nil and true or val
@@ -348,7 +403,10 @@ function SUB:GetOptions(db)
                 name = "Custom Button",
                 desc = "Enable the custom shortcut button.",
                 get = function() return db.selection_custom end,
-                set = function(_, value) db.selection_custom = value UpdateLayout() end,
+                set = function(_, value)
+                    db.selection_custom = value
+                    UpdateLayout()
+                end,
                 disabled = function() return not db.enabled end,
             },
             replaceTarget = {
@@ -370,7 +428,10 @@ function SUB:GetOptions(db)
                     ["HelpMicroButton"] = "Replace Help",
                 },
                 get = function() return db.replaceTarget or "LFDMicroButton" end,
-                set = function(_, value) db.replaceTarget = value UpdateLayout() end,
+                set = function(_, value)
+                    db.replaceTarget = value
+                    UpdateLayout()
+                end,
                 disabled = function() return not db.enabled or not db.selection_custom end,
             },
             customType = {
@@ -384,7 +445,10 @@ function SUB:GetOptions(db)
                     ["MOUNT"] = "Mount Journal Shortcut",
                 },
                 get = function() return db.customType or "LFG" end,
-                set = function(_, value) db.customType = value UpdateLayout() end,
+                set = function(_, value)
+                    db.customType = value
+                    UpdateLayout()
+                end,
                 disabled = function() return not db.enabled or not db.selection_custom end,
             },
         },
@@ -415,7 +479,7 @@ watcher:SetScript("OnEvent", function(self)
     local sliderUnlocked = false
     self:SetScript("OnUpdate", function(s, e)
         elapsed = elapsed + e
-        
+
         -- Try to unlock the slider until it works (options might load late)
         if not sliderUnlocked then
             sliderUnlocked = UnlockSlider()

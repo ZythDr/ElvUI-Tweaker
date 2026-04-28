@@ -2,7 +2,7 @@
 ## Title: |cff1784d1E|r|cffe5e3e3lvUI|r |cff1784d1T|r|cffe5e3e3weaker|r |cff1784d1D|r|cffe5e3e3ata|r|cff1784d1T|r|cffe5e3e3exts|r
 ## Notes: Collection of ElvUI DataText modules including Gold icon scaling, Movement Speed, and Online Count.
 ## Author: ZythDr
-## Version: 1.3.2
+## Version: 1.3.3
 ## RequiredDeps: ElvUI-Tweaker, ElvUI
 ## Dependencies: ElvUI
 
