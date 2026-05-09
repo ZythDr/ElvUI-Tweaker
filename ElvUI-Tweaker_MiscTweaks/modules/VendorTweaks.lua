@@ -507,7 +507,7 @@ local function BuildUI()
 
         local altbg = row:CreateTexture(nil, "BACKGROUND")
         altbg:SetAllPoints()
-        altbg:SetColorTexture(1, 1, 1, 0.05)
+        altbg:SetTexture(1, 1, 1, 0.05)
         altbg:Hide()
         row.altbg = altbg
 
