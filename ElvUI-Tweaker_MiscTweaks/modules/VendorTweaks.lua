@@ -16,6 +16,17 @@ SUB.defaults = {
     alternateRows = true,
     showCurrencies = true,
     currencyScale = 1.0,
+    -- Item coloring
+    colorUnusable = true,
+    colorUnusableColor = { 0.8, 0, 0 },
+    colorAlreadyKnown = true,
+    colorAlreadyKnownColor = { 0, 0.75, 0 },
+    colorNotYetKnown = false,
+    colorNotYetKnownColor = { 0.8, 0.8, 0 },
+    colorIcons = true,
+    -- Owned item coloring
+    colorOwned = false,
+    colorOwnedColor = { 0.3, 0.7, 1 },
 }
 
 local E, L, V, P, G = unpack(_G.ElvUI)
@@ -28,7 +39,33 @@ local SCROLLSTEP = 5
 
 local offset = 0
 local searchstring = nil
-local knowns = {} -- simplified version of KnownScanner
+local knownCache = {}   -- per-session cache: [merchantIndex] = true/false
+local scanTip           -- hidden tooltip for "Already known" detection
+
+-- Item classes that can contain learnable items
+-- Built from localized class names so it works on any locale
+local LEARNABLE_ITEM_CLASSES
+local function BuildLearnableClasses()
+    LEARNABLE_ITEM_CLASSES = {}
+    local classNames = { GetAuctionItemClasses() }
+    
+    local isEpoch = false
+    if SUB.db and SUB.db.projectEpochCompat ~= nil then
+        isEpoch = SUB.db.projectEpochCompat
+    else
+        isEpoch = (#classNames >= 12)
+    end
+
+    if isEpoch then
+        -- Ascension/Epoch indices: 9 = Recipe, 11 = Miscellaneous
+        if classNames[9] then LEARNABLE_ITEM_CLASSES[classNames[9]] = "recipe" end
+        if classNames[11] then LEARNABLE_ITEM_CLASSES[classNames[11]] = "misc" end
+    else
+        -- Standard 3.3.5 indices: 7 = Recipe, 9 = Miscellaneous
+        if classNames[7] then LEARNABLE_ITEM_CLASSES[classNames[7]] = "recipe" end
+        if classNames[9] then LEARNABLE_ITEM_CLASSES[classNames[9]] = "misc" end
+    end
+end
 local currencyCache = {}
 local tokenFrames = {}
 local currencyBar
@@ -169,44 +206,89 @@ local function GetAltCurrencyFrame(frame)
     return child
 end
 
+-- Returns how many of a given cost currency the player currently has
+local function GetPlayerCurrencyCount(texture, link)
+    if not link and not texture then return 0 end
+    if link then
+        local bagCount = GetItemCount(link) or 0
+        if bagCount > 0 then return bagCount end
+        local name = GetItemInfo(link)
+        if name and currencyCache[name:lower()] then
+            return currencyCache[name:lower()].count or 0
+        end
+    end
+    if texture then
+        for _, info in pairs(currencyCache) do
+            if info.icon == texture then return info.count or 0 end
+        end
+    end
+    return 0
+end
+
 local function AddAltCurrency(frame, i)
     local lastframe = frame.ItemPrice
     local honorPoints, arenaPoints, itemCount = GetMerchantItemCostInfo(i)
     for j = itemCount, 1, -1 do
         local child = frame:GetAltCurrencyFrame()
-        local texture, price = GetMerchantItemCostItem(i, j)
+        local texture, price, costLink = GetMerchantItemCostItem(i, j)
         child:SetValue(price, texture)
         child.index, child.itemIndex, child.link = i, j
+        -- Color cost text red if player cannot afford it
+        local have = GetPlayerCurrencyCount(texture, costLink)
+        child.text:SetTextColor(have >= price and 1 or 1, have >= price and 1 or 0.1, have >= price and 1 or 0.1)
         lastframe = child.text
     end
     if arenaPoints > 0 then
         local child = frame:GetAltCurrencyFrame()
         child:SetValue(arenaPoints, "Interface\\PVPFrame\\PVP-ArenaPoints-Icon", ARENA_POINTS)
+        local have = GetArenaCurrency() or 0
+        child.text:SetTextColor(have >= arenaPoints and 1 or 1, have >= arenaPoints and 1 or 0.1, have >= arenaPoints and 1 or 0.1)
         lastframe = child.text
     end
     if honorPoints > 0 then
         local child = frame:GetAltCurrencyFrame()
         child:SetValue(honorPoints, "Interface\\PVPFrame\\PVP-Currency-" .. UnitFactionGroup("player"), HONOR_POINTS)
+        local have = GetHonorCurrency() or 0
+        child.text:SetTextColor(have >= honorPoints and 1 or 1, have >= honorPoints and 1 or 0.1, have >= honorPoints and 1 or 0.1)
         lastframe = child.text
     end
     frame.ItemName:SetPoint("RIGHT", lastframe, "LEFT", -GAP, 0)
 end
 
-local default_grad = { 0, 1, 0, 0.75, 0, 1, 0, 0 }
-local grads = setmetatable({
-    red = { 1, 0, 0, 0.75, 1, 0, 0, 0 },
-    [1] = { 1, 1, 1, 0.75, 1, 1, 1, 0 },
-    [2] = default_grad,
-    [3] = { 0.5, 0.5, 1, 1, 0, 0, 1, 0 },
-    [4] = { 1, 0, 1, 0.75, 1, 0, 1, 0 },
-    [7] = { 1, .75, .5, 0.75, 1, .75, .5, 0 },
-}, { __index = function(t, i) return default_grad end })
-
-local _, _, _, _, _, _, _, _, RECIPE = GetAuctionItemClasses()
 local quality_colors = setmetatable({}, { __index = function() return "|cffffffff" end })
 for i = 1, 7 do quality_colors[i] = select(4, GetItemQualityColor(i)) end
 
--- HMDIH Integration: Currency Scanning and Bar
+local function MakeGradient(r, g, b)
+    return r, g, b, 0.75, r, g, b, 0
+end
+
+-- Tooltip-scan based "already known" detection.
+-- Uses the game's own 'Already known' text (ITEM_SPELL_KNOWN) for reliability.
+local function IsAlreadyKnown(merchantIndex)
+    if knownCache[merchantIndex] ~= nil then
+        return knownCache[merchantIndex]
+    end
+    if not scanTip then
+        scanTip = CreateFrame("GameTooltip", "EWT_VendorScanTip", nil, "GameTooltipTemplate")
+        scanTip:SetOwner(WorldFrame, "ANCHOR_NONE")
+    end
+    scanTip:ClearLines()
+    scanTip:SetMerchantItem(merchantIndex)
+    local result = false
+    for i = 1, scanTip:NumLines() do
+        local line = _G["EWT_VendorScanTipTextLeft" .. i]
+        if line then
+            local text = line:GetText()
+            if text and text == ITEM_SPELL_KNOWN then
+                result = true
+                break
+            end
+        end
+    end
+    knownCache[merchantIndex] = result
+    return result
+end
+
 local function LoadAllCurrencies()
     wipe(currencyCache)
     local n = GetCurrencyListSize() or 0
@@ -346,6 +428,7 @@ end
 
 local function Refresh()
     if not f or not f:IsShown() then return end
+    LoadAllCurrencies() -- Ensure cache is fresh before any affordability checks
     local n = GetMerchantNumItems()
     local numRows = SUB.db.numRows or 12
     local altRows = SUB.db.alternateRows
@@ -365,19 +448,49 @@ local function Refresh()
                 GetMerchantItemInfo(j)
             local link = GetMerchantItemLink(j)
             local color = quality_colors.default
+            local isLearnable, isAlreadyKnown = false, false
+
             if link then
-                local name2, link2, quality, iLevel, reqLevel, class, subclass, maxStack, equipSlot, texture, vendorPrice =
-                    GetItemInfo(link)
+                local _, _, quality, _, _, itemClass = GetItemInfo(link)
                 if quality then color = quality_colors[quality] end
 
-                if class == RECIPE and not knowns[link] then
-                    row.backdrop:SetGradientAlpha("HORIZONTAL", unpack(grads[quality or 1]))
-                    row.backdrop:Show()
+                -- Only check learnable status for Recipe/Miscellaneous class items
+                if itemClass and LEARNABLE_ITEM_CLASSES and LEARNABLE_ITEM_CLASSES[itemClass] then
+                    -- Private servers often return nil for GetItemSpell on custom recipes.
+                    -- If it's a Recipe, it's always learnable. For Misc, fallback to GetItemSpell.
+                    if LEARNABLE_ITEM_CLASSES[itemClass] == "recipe" then
+                        isLearnable = true
+                    else
+                        local spellName = GetItemSpell(link)
+                        if spellName and spellName ~= "" then
+                            isLearnable = true
+                        end
+                    end
+                    -- Always scan the tooltip for "Already known" if it's in these categories
+                    isAlreadyKnown = IsAlreadyKnown(j)
                 end
             end
 
-            if not isUsable then
-                row.backdrop:SetGradientAlpha("HORIZONTAL", unpack(grads.red))
+            local db = SUB.db
+            local isOwned = link and db.colorOwned and (GetItemCount(link) or 0) > 0
+
+            -- Apply backdrop: unusable > already known > not yet known > owned
+            row.backdrop:Hide()
+            if not isUsable and db.colorUnusable then
+                local c = db.colorUnusableColor or { 0.8, 0, 0 }
+                row.backdrop:SetGradientAlpha("HORIZONTAL", MakeGradient(c[1], c[2], c[3]))
+                row.backdrop:Show()
+            elseif isAlreadyKnown and db.colorAlreadyKnown then
+                local c = db.colorAlreadyKnownColor or { 0, 0.75, 0 }
+                row.backdrop:SetGradientAlpha("HORIZONTAL", MakeGradient(c[1], c[2], c[3]))
+                row.backdrop:Show()
+            elseif isLearnable and not isAlreadyKnown and db.colorNotYetKnown then
+                local c = db.colorNotYetKnownColor or { 0.8, 0.8, 0 }
+                row.backdrop:SetGradientAlpha("HORIZONTAL", MakeGradient(c[1], c[2], c[3]))
+                row.backdrop:Show()
+            elseif isOwned then
+                local c = db.colorOwnedColor or { 0.3, 0.7, 1 }
+                row.backdrop:SetGradientAlpha("HORIZONTAL", MakeGradient(c[1], c[2], c[3]))
                 row.backdrop:Show()
             end
 
@@ -407,7 +520,25 @@ local function Refresh()
                 row.extendedCost = nil
             end
 
-            if isUsable then row.icon:SetVertexColor(1, 1, 1) else row.icon:SetVertexColor(.9, 0, 0) end
+            if db.colorIcons then
+                if not isUsable and db.colorUnusable then
+                    local c = db.colorUnusableColor or { 0.8, 0, 0 }
+                    row.icon:SetVertexColor(c[1], c[2], c[3])
+                elseif isAlreadyKnown and db.colorAlreadyKnown then
+                    local c = db.colorAlreadyKnownColor or { 0, 0.75, 0 }
+                    row.icon:SetVertexColor(c[1], c[2], c[3])
+                elseif isLearnable and not isAlreadyKnown and db.colorNotYetKnown then
+                    local c = db.colorNotYetKnownColor or { 0.8, 0.8, 0 }
+                    row.icon:SetVertexColor(c[1], c[2], c[3])
+                elseif isOwned then
+                    local c = db.colorOwnedColor or { 0.3, 0.7, 1 }
+                    row.icon:SetVertexColor(c[1], c[2], c[3])
+                else
+                    row.icon:SetVertexColor(1, 1, 1)
+                end
+            else
+                row.icon:SetVertexColor(1, 1, 1)
+            end
             row:SetID(j)
             row:Show()
         end
@@ -446,7 +577,7 @@ end
 local function BuildUI()
     if f then return end
     f = CreateFrame("Frame", "EWT_VendorTweaksFrame", MerchantFrame)
-    f:SetWidth(304)
+    f:SetWidth(325)
     f:SetHeight(294)
     f:SetPoint("TOPLEFT", 19, -54)
     f:SetTemplate("Transparent")
@@ -605,6 +736,7 @@ local function BuildUI()
     end)
 
     f:SetScript("OnShow", function(self)
+        wipe(knownCache) -- fresh detection each time the vendor opens
         local numRows = SUB.db.numRows or 12
         local max = math.max(0, GetMerchantNumItems() - numRows)
         scrollbar:SetMinMaxValues(0, max)
@@ -668,6 +800,7 @@ end
 function SUB:ApplyEnabled(db)
     SUB.db = db
     if db.enabled then
+        BuildLearnableClasses()
         BuildUI()
         UpdateRowLayout()
 
@@ -703,7 +836,7 @@ function SUB:GetOptions(db)
             enabled = {
                 order = 2,
                 type = "toggle",
-                width = "normal",
+                width = "double",
                 name = function() return db.enabled and "|cff00ff00Enabled|r" or "|cffff0000Disabled|r" end,
                 desc = "Toggle the Vendor Tweaks module.",
                 get = function() return db.enabled end,
@@ -715,11 +848,24 @@ function SUB:GetOptions(db)
                     end
                 end,
             },
-            spacer1 = {
+            projectEpochCompat = {
                 order = 2.1,
-                type = "description",
-                name = " ",
+                type = "toggle",
                 width = "double",
+                name = "Project Epoch Compatibility",
+                desc = "Adjusts item classification indices for Project Epoch/Ascension servers (where custom categories push default indices down). Automatically enables itself if your client has modified AH categories.",
+                get = function() 
+                    if db.projectEpochCompat == nil then
+                        return (select("#", GetAuctionItemClasses()) >= 12)
+                    end
+                    return db.projectEpochCompat 
+                end,
+                set = function(_, value)
+                    db.projectEpochCompat = value
+                    BuildLearnableClasses()
+                    if f and f:IsShown() then Refresh() end
+                end,
+                disabled = function() return not db.enabled end,
             },
             alternateRows = {
                 order = 3,
@@ -786,6 +932,153 @@ function SUB:GetOptions(db)
                     UpdateCurrencyBar()
                 end,
                 disabled = function() return not db.enabled or not db.showCurrencies end,
+            },
+            -- Item Coloring
+            colorHeader = {
+                order = 7,
+                type = "header",
+                name = "Item Coloring",
+            },
+            colorHeaderDesc = {
+                order = 7.1,
+                type = "description",
+                name =
+                "Color vendor rows based on item status. Learnable items include recipes, spells, mounts, and companions.\n",
+            },
+            colorUnusable = {
+                order = 8,
+                type = "toggle",
+                width = "normal",
+                name = "Color Unusable",
+                desc =
+                "Highlights items you cannot use (wrong level, class, or profession) with a colored row and icon tint.",
+                get = function() return db.colorUnusable end,
+                set = function(_, v)
+                    db.colorUnusable = v
+                    Refresh()
+                end,
+                disabled = function() return not db.enabled end,
+            },
+            colorUnusableColor = {
+                order = 8.1,
+                type = "color",
+                width = "half",
+                name = "Color",
+                hasAlpha = false,
+                get = function()
+                    local c = db.colorUnusableColor or { 0.8, 0, 0 }
+                    return c[1], c[2], c[3], 1, 0.8, 0, 0, 1
+                end,
+                set = function(_, r, g, b)
+                    db.colorUnusableColor = { r, g, b }
+                    Refresh()
+                end,
+                disabled = function() return not db.enabled or not db.colorUnusable end,
+            },
+            colorUnusableSpacer = { order = 8.2, type = "description", name = " ", width = "double" },
+            colorAlreadyKnown = {
+                order = 9,
+                type = "toggle",
+                width = "normal",
+                name = "Color Already Known",
+                desc = "Highlights learnable items (recipes, mounts, etc.) that you have already learned.",
+                get = function() return db.colorAlreadyKnown end,
+                set = function(_, v)
+                    db.colorAlreadyKnown = v
+                    Refresh()
+                end,
+                disabled = function() return not db.enabled end,
+            },
+            colorAlreadyKnownColor = {
+                order = 9.1,
+                type = "color",
+                width = "half",
+                name = "Color",
+                hasAlpha = false,
+                get = function()
+                    local c = db.colorAlreadyKnownColor or { 0, 0.75, 0 }
+                    return c[1], c[2], c[3], 1, 0, 0.75, 0, 1
+                end,
+                set = function(_, r, g, b)
+                    db.colorAlreadyKnownColor = { r, g, b }
+                    Refresh()
+                end,
+                disabled = function() return not db.enabled or not db.colorAlreadyKnown end,
+            },
+            colorAlreadyKnownSpacer = { order = 9.2, type = "description", name = " ", width = "double" },
+            colorNotYetKnown = {
+                order = 10,
+                type = "toggle",
+                width = "normal",
+                name = "Color Not Yet Known",
+                desc = "Highlights learnable items (recipes, mounts, etc.) that you can use but have not yet learned.",
+                get = function() return db.colorNotYetKnown end,
+                set = function(_, v)
+                    db.colorNotYetKnown = v
+                    Refresh()
+                end,
+                disabled = function() return not db.enabled end,
+            },
+            colorNotYetKnownColor = {
+                order = 10.1,
+                type = "color",
+                width = "half",
+                name = "Color",
+                hasAlpha = false,
+                get = function()
+                    local c = db.colorNotYetKnownColor or { 0.8, 0.8, 0 }
+                    return c[1], c[2], c[3], 1, 0.8, 0.8, 0, 1
+                end,
+                set = function(_, r, g, b)
+                    db.colorNotYetKnownColor = { r, g, b }
+                    Refresh()
+                end,
+                disabled = function() return not db.enabled or not db.colorNotYetKnown end,
+            },
+            colorIconsSpacer = { order = 10.2, type = "description", name = " ", width = "double" },
+            colorOwned = {
+                order = 11,
+                type = "toggle",
+                width = "normal",
+                name = "Color Owned",
+                desc = "Highlights items that you already have in your inventory, bank, or bags. Useful for preventing duplicate purchases at PvP vendors.",
+                get = function() return db.colorOwned end,
+                set = function(_, v)
+                    db.colorOwned = v
+                    Refresh()
+                end,
+                disabled = function() return not db.enabled end,
+            },
+            colorOwnedColor = {
+                order = 11.1,
+                type = "color",
+                width = "half",
+                name = "Color",
+                hasAlpha = false,
+                get = function()
+                    local c = db.colorOwnedColor or { 0.3, 0.7, 1 }
+                    return c[1], c[2], c[3], 1, 0.3, 0.7, 1, 1
+                end,
+                set = function(_, r, g, b)
+                    db.colorOwnedColor = { r, g, b }
+                    Refresh()
+                end,
+                disabled = function() return not db.enabled or not db.colorOwned end,
+            },
+            colorOwnedSpacer = { order = 11.2, type = "description", name = " ", width = "double" },
+            colorIcons = {
+                order = 12,
+                type = "toggle",
+                width = "double",
+                name = "Tint Icons",
+                desc =
+                "When enabled, item icons are also tinted with the corresponding status color. Disable to keep icons at full brightness while still showing the row background coloring.",
+                get = function() return db.colorIcons end,
+                set = function(_, v)
+                    db.colorIcons = v
+                    Refresh()
+                end,
+                disabled = function() return not db.enabled end,
             },
         }
     }
