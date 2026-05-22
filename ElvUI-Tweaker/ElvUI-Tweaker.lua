@@ -9,6 +9,7 @@ EWTweaker.defaultDB = {}
 EWTweaker.MODULES = {
     DataTexts = { title = "DataTexts", addon = "ElvUI-Tweaker_DataTexts" },
     MiscTweaks = { title = "MiscTweaks", addon = "ElvUI-Tweaker_MiscTweaks" },
+    OptionsTweaks = { title = "Options Tweaks", addon = "ElvUI-Tweaker_OptionsTweaks" },
     -- Example: AnotherModule = { title = "AnotherModule", addon = "ElvUI-Tweaker_AnotherModule" },
 }
 
@@ -104,7 +105,7 @@ end
 
 -- Use LibElvUIPlugin-1.0 to inject config at the right time (when ElvUI_Options loads)
 local EP = LibStub("LibElvUIPlugin-1.0")
-EP:RegisterPlugin("EWTweaker", InjectConfig)
+EP:RegisterPlugin("ElvUI-Tweaker", InjectConfig)
 
 -- Setup DB and auto-enable modules on login
 local f = CreateFrame("Frame")

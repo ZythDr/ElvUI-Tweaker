@@ -8,6 +8,13 @@ Everything is optional and opt-in. If you don't want a specific feature, you can
 
 The addon is split into different packages so you only load what you need. Right now, it includes:
 
+### Options Tweaks
+
+Tweaks for ElvUI's options window:
+
+- **Options Search:** Adds a search field to ElvUI's options window. Search across option names, descriptions, and internal keys, then click a result to jump directly to the matching config section. Both ElvUI's own options and any ElvUI plugin options will be included when searching.
+- This module is meant to host sub-modules that integrate directly into ElvUI's options, rather than being accessed through the dedicated `ElvUI Tweaker` section in ElvUI's options.
+
 ### Misc Tweaks
 
 A collection of general interface improvements:
@@ -58,6 +65,6 @@ Tweaks and additions to ElvUI's DataTexts:
 
 1. Download or clone the repository.
 2. Extract `ElvUI-Tweaker-main` and open the extracted folder
-3. Inside of `ElvUI-Tweaker-main`, move the `ElvUI-Tweaker` folder along with `ElvUI-Tweaker_DataTexts` and `ElvUI-Tweaker_MiscTweaks` folders into your `WoW/Interface/AddOns` directory.
+3. Inside of `ElvUI-Tweaker-main`, move the `ElvUI-Tweaker` folder along with `ElvUI-Tweaker_DataTexts`, `ElvUI-Tweaker_MiscTweaks`, and `ElvUI-Tweaker_OptionsTweaks` folders into your `WoW/Interface/AddOns` directory.
 4. Restart WoW
 5. Once in-game, you can configure ElvUI-Tweaker via `/ec` and looking for the **ElvUI Tweaker** tab on the left side. From there, you can enable, disable, and tweak any and all modules to your liking.
