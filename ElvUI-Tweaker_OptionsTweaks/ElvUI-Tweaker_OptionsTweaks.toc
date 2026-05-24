@@ -2,7 +2,7 @@
 ## Title: |cff1784d1E|r|cffe5e3e3lvUI|r |cff1784d1T|r|cffe5e3e3weaker|r |cff1784d1O|r|cffe5e3e3ptions|r |cff1784d1T|r|cffe5e3e3weaks|r
 ## Notes: Options search and navigation tweaks for ElvUI-WotLK/Epoch.
 ## Author: ZythDr
-## Version: 1.4.1
+## Version: 1.4.2
 ## RequiredDeps: ElvUI-Tweaker, ElvUI
 ## Dependencies: ElvUI
 

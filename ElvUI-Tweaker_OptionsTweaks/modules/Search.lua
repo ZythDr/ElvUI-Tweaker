@@ -532,6 +532,19 @@ local function ShowSearchTooltip(widget)
     GameTooltip:Show()
 end
 
+local function HideSearchCommitButton(widget)
+    if not widget then return end
+
+    if widget.DisableButton then
+        widget:DisableButton(true)
+    elseif widget.button then
+        widget.button:Hide()
+        if widget.editbox and widget.editbox.SetTextInsets then
+            widget.editbox:SetTextInsets(0, 0, 3, 3)
+        end
+    end
+end
+
 local function RegisterSearchWidget()
     local AceGUI = E and E.Libs and E.Libs.AceGUI
     local baseConstructor = AceGUI and AceGUI.WidgetRegistry and AceGUI.WidgetRegistry.EditBox
@@ -570,7 +583,7 @@ local function RegisterSearchWidget()
             self.editbox:ClearAllPoints()
             self.editbox:SetPoint("TOPLEFT", self.frame, "TOPLEFT", 7, 0)
             self.editbox:SetPoint("TOPRIGHT", self.frame, "TOPRIGHT", 0, 0)
-            self:DisableButton(true)
+            HideSearchCommitButton(self)
             self:SetCallback("OnTextChanged", function()
                 UpdateSearchPlaceholder(self)
             end)
