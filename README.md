@@ -2,7 +2,7 @@
 
 ElvUI Tweaker is a modular plugin for ElvUI-Epoch or ElvUI_WotLK for client 3.3.5. It adds a bunch of small, handy quality-of-life features and customizations that aren't available in the base ElvUI package.
 
-Everything is optional and opt-in. If you don't want a specific feature, you can simply leave it disabled it in the options menu.
+Everything is optional and opt-in. If you don't want a specific feature, you can simply leave it disabled in the options menu.
 
 ## Features
 
@@ -13,7 +13,9 @@ The addon is split into different packages so you only load what you need. Right
 Tweaks for ElvUI's options window:
 
 - **Options Search:** Adds a search field to ElvUI's options window. Search across option names, descriptions, and internal keys, then click a result to jump directly to the matching config section. Both ElvUI's own options and any ElvUI plugin options will be included when searching.
-- This module is meant to host sub-modules that integrate directly into ElvUI's options, rather than being accessed through the dedicated `ElvUI Tweaker` section in ElvUI's options.
+- **Tabs Fix:** Fixes ElvUI options tabs on affected WotLK backports where AceGUI TabGroup widgets can render as vertical one-per-row lists instead of horizontal wrapping tabs. This patch is scoped to ElvUI's own options UI so other Ace3 addons are not affected.
+
+This package is meant to host sub-modules that integrate directly into ElvUI's options, rather than only being accessed through the dedicated `ElvUI Tweaker` section in ElvUI's options.
 
 ### Misc Tweaks
 
@@ -32,6 +34,11 @@ A collection of general interface improvements:
 - **Bag Swap:** Simplifies the process of replacing equipped bags.
   - **Automatic Emptying**: When replacing a bag, this module automatically moves its contents to your free inventory slots, then equips the new bag.
 
+- **Roll Save:** Lets you save loot roll choices per character.
+  - **Save from Roll Buttons**: Right-click, or use a configurable modifier-right-click, on Need, Greed, Disenchant, or Pass to remember that choice for the item.
+  - **Automatic Future Rolls**: When the same item drops again, Roll Save automatically repeats the saved choice if that roll option is available.
+  - **Saved Item List**: Add, update, or remove saved roll choices manually by item ID or item link.
+
 - **Chat Editbox Mover:** Detaches the chat typing box from the main chat window so you can place it anywhere on your screen.
 - **Five Second Rule:** Adds a visual "spark" to the Player UnitFrame's power/mana bar that tracks your mana regeneration ticks, and visualizes the 5-second delay before natural mana regeneration resumes after casting a spell.
 - **Tooltip Anchor:** This module lets you attach the in-game tooltip to various bag addons to avoid having the tooltip overlapping the bag frames.
@@ -40,10 +47,10 @@ A collection of general interface improvements:
 > [!NOTE]  
 > For any other bag addons, you can use the `Custom` option to attach the tooltip to your bag frame.  
 > To add a custom frame, you'll need to provide a frame name to attach the tooltip to.  
-> To idenfity a frame, type `/fstack` and hover over the bag frame to see the frame name. For example: `ElvUI_ContainerFrame` for ElvUI's bags.  
+> To identify a frame, type `/fstack` and hover over the bag frame to see the frame name. For example: `ElvUI_ContainerFrame` for ElvUI's bags.
 
-- **Game Time Display:** Adds back the ability to see the in-game day/night cycle, this can be very useful for certain quests and abilities in the game.
-- **Shapeshift Remover:** Automatically removes specific transformation buffs (like Noggenfogger Elixir) that prevent you from taking actions like using flight paths or mounting. You can configure the list of buffs to remove in the GUI.
+- **Game Time Display:** Adds back the ability to see the in-game day/night cycle. This can be very useful for certain quests and abilities in the game.
+- **Shapeshift Remover:** Automatically removes specific transformation buffs (like Noggenfogger Elixir) that prevent you from taking actions like using flight paths or mounting. You can configure the list of buffs to remove in the GUI, including custom spell IDs or currently active buff names.
 
 > [!NOTE]
 > Shapeshift Remover can also be triggered manually in macros by adding `/removeshapeshift` to a separate line.
@@ -67,4 +74,4 @@ Tweaks and additions to ElvUI's DataTexts:
 2. Extract `ElvUI-Tweaker-main` and open the extracted folder
 3. Inside of `ElvUI-Tweaker-main`, move the `ElvUI-Tweaker` folder along with `ElvUI-Tweaker_DataTexts`, `ElvUI-Tweaker_MiscTweaks`, and `ElvUI-Tweaker_OptionsTweaks` folders into your `WoW/Interface/AddOns` directory.
 4. Restart WoW
-5. Once in-game, you can configure ElvUI-Tweaker via `/ec` and looking for the **ElvUI Tweaker** tab on the left side. From there, you can enable, disable, and tweak any and all modules to your liking.
+5. Once in-game, you can configure ElvUI-Tweaker via `/ec` and looking for the **ElvUI Tweaker** section on the left side. Expand it to open **DataTexts**, **MiscTweaks**, and **OptionsTweaks**, or click **ElvUI Tweaker** itself for the module shortcut page.
