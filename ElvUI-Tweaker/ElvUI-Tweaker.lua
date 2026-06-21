@@ -12,6 +12,7 @@ EWTweaker.MODULES = {
     OptionsTweaks = { title = "Options Tweaks", addon = "ElvUI-Tweaker_OptionsTweaks" },
     -- Example: AnotherModule = { title = "AnotherModule", addon = "ElvUI-Tweaker_AnotherModule" },
 }
+EWTweaker.MODULE_ORDER = { "DataTexts", "MiscTweaks", "OptionsTweaks" }
 
 EWTweaker.db = nil
 
@@ -53,11 +54,12 @@ end
 local function InjectConfig()
     if not ElvUI or not ElvUI[1] or not ElvUI[1].Options then return end
     local E = ElvUI[1]
+    local ACD = (E.Libs and E.Libs.AceConfigDialog) or LibStub("AceConfigDialog-3.0", true)
     local config = {
         type = "group",
         name = "|cff00FF96ElvUI Tweaker|r",
         order = 100,
-        childGroups = "tab",
+        childGroups = "tree",
         args = {
             perCharacter = {
                 type = "toggle",
@@ -71,10 +73,28 @@ local function InjectConfig()
                     EWTweaker:RefreshDB()
                 end,
             },
+            header = {
+                order = 2,
+                type = "header",
+                name = "|cff00FF96ElvUI Tweaker|r",
+            },
+            description = {
+                order = 3,
+                type = "description",
+                name = "Tweaks and quality-of-life options for ElvUI and related WotLK backports.",
+            },
+            shortcuts = {
+                order = 4,
+                type = "group",
+                name = "Modules",
+                guiInline = true,
+                args = {},
+            },
         }
     }
     local baseOrder = 10
-    for modName, modInfo in pairs(EWTweaker.MODULES) do
+    for _, modName in ipairs(EWTweaker.MODULE_ORDER) do
+        local modInfo = EWTweaker.MODULES[modName]
         -- Ensure LoD modules are loaded
         if modInfo.addon and not IsAddOnLoaded(modInfo.addon) then
             LoadAddOn(modInfo.addon)
@@ -98,6 +118,16 @@ local function InjectConfig()
                 }
             }
         end
+        config.args.shortcuts.args[modName] = {
+            order = baseOrder,
+            type = "execute",
+            name = modInfo.title,
+            func = function()
+                if ACD then
+                    ACD:SelectGroup("ElvUI", "Tweaker", modName)
+                end
+            end,
+        }
         baseOrder = baseOrder + 1
     end
     E.Options.args["Tweaker"] = config

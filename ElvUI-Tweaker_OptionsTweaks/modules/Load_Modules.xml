@@ -1,4 +1,5 @@
 <Ui xmlns="http://www.blizzard.com/wow/ui/">
     <!-- Modules loader for OptionsTweaks. -->
     <Script file="Search.lua"/>
+    <Script file="TabsFix.lua"/>
 </Ui>

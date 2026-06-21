@@ -9,4 +9,5 @@
     <Script file="VendorTweaks.lua"/>
     <Script file="BagSwap.lua"/>
     <Script file="MicrobarTweaks.lua"/>
+    <Script file="RollSave.lua"/>
 </Ui>

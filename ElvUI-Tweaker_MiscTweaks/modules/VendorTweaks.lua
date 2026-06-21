@@ -76,6 +76,8 @@ local rows = {}
 local isHooked = false
 
 -- Utility Functions
+local HONOR_POINTS_ID = 43308
+local ARENA_POINTS_ID = 43307
 local HONOR_POINTS = "|cffffffff|Hitem:43308:0:0:0:0:0:0:0:0|h[Honor Points]|h|r"
 local ARENA_POINTS = "|cffffffff|Hitem:43307:0:0:0:0:0:0:0:0|h[Arena Points]|h|r"
 
@@ -264,18 +266,23 @@ end
 
 -- Tooltip-scan based "already known" detection.
 -- Uses the game's own 'Already known' text (ITEM_SPELL_KNOWN) for reliability.
-local function IsAlreadyKnown(merchantIndex)
-    if knownCache[merchantIndex] ~= nil then
-        return knownCache[merchantIndex]
-    end
+local function GetScanTip()
     if not scanTip then
         scanTip = CreateFrame("GameTooltip", "EWT_VendorScanTip", nil, "GameTooltipTemplate")
         scanTip:SetOwner(WorldFrame, "ANCHOR_NONE")
     end
-    scanTip:ClearLines()
-    scanTip:SetMerchantItem(merchantIndex)
+    return scanTip
+end
+
+local function IsAlreadyKnown(merchantIndex)
+    if knownCache[merchantIndex] ~= nil then
+        return knownCache[merchantIndex]
+    end
+    local tip = GetScanTip()
+    tip:ClearLines()
+    tip:SetMerchantItem(merchantIndex)
     local result = false
-    for i = 1, scanTip:NumLines() do
+    for i = 1, tip:NumLines() do
         local line = _G["EWT_VendorScanTipTextLeft" .. i]
         if line then
             local text = line:GetText()
@@ -289,27 +296,166 @@ local function IsAlreadyKnown(merchantIndex)
     return result
 end
 
+local function GetMerchantCostCurrencyName(merchantIndex, costIndex)
+    local tip = GetScanTip()
+    tip:ClearLines()
+    if not tip.SetMerchantCostItem then return nil end
+    tip:SetMerchantCostItem(merchantIndex, costIndex)
+
+    local line = _G["EWT_VendorScanTipTextLeft1"]
+    local text = line and line:GetText()
+    return text and text ~= "" and text or nil
+end
+
+local function NormalizeCurrencyName(name)
+    if not name or name == "" then return nil end
+
+    name = name:gsub("|c%x%x%x%x%x%x%x%x", "")
+    name = name:gsub("|r", "")
+    name = name:gsub("|H.-|h%[(.-)%]|h", "%1")
+    name = name:gsub("^%s+", ""):gsub("%s+$", "")
+
+    return name ~= "" and name:lower() or nil
+end
+
+local function NormalizeTexture(texture)
+    if not texture or texture == "" then return nil end
+    return tostring(texture):lower():gsub("/", "\\")
+end
+
+local function ExtractItemID(link)
+    if not link then return nil end
+    local id = tostring(link):match("item:(%d+)")
+    return id and tonumber(id) or nil
+end
+
+local function FindCurrencyByIcon(texture)
+    local key = NormalizeTexture(texture)
+    if not key then return nil end
+
+    for _, info in pairs(currencyCache) do
+        if NormalizeTexture(info.icon) == key then
+            return info
+        end
+    end
+end
+
+local function FindCurrencyByID(id)
+    if not id then return nil end
+
+    for _, info in pairs(currencyCache) do
+        if info.currencyID and tonumber(info.currencyID) == tonumber(id) then
+            return info
+        end
+    end
+end
+
+local function FindCurrencyByItemName(itemName)
+    local key = NormalizeCurrencyName(itemName)
+    if not key then return nil end
+
+    if currencyCache[key] then return currencyCache[key] end
+
+    for lowerName, info in pairs(currencyCache) do
+        if key:find(lowerName, 1, true) or lowerName:find(key, 1, true) then
+            return info
+        end
+    end
+end
+
+local function IsLikelyCurrencyItemID(value)
+    return type(value) == "number" and value >= 1000
+end
+
+local function ScanMerchantItemTooltipForCurrencies(merchantIndex, found)
+    local tip = GetScanTip()
+    tip:ClearLines()
+    tip:SetMerchantItem(merchantIndex)
+
+    for i = 1, tip:NumLines() do
+        local line = _G["EWT_VendorScanTipTextLeft" .. i]
+        local text = line and line:GetText()
+        local key = NormalizeCurrencyName(text)
+        if key then
+            for lowerName in pairs(currencyCache) do
+                if key:find(lowerName, 1, true) then
+                    found[lowerName] = true
+                end
+            end
+        end
+    end
+end
+
+local function MarkCurrency(found, info, fallbackName)
+    local key = info and NormalizeCurrencyName(info.name) or NormalizeCurrencyName(fallbackName)
+    if key then found[key] = true end
+end
+
+local function MarkCurrencyWithIcon(found, info, fallbackName, texture)
+    local key = info and NormalizeCurrencyName(info.name) or NormalizeCurrencyName(fallbackName)
+    if not key then return end
+
+    found[key] = true
+    if info and texture and texture ~= "" then
+        info.vendorIcon = texture
+    end
+end
+
+local function MarkBuiltinCurrency(found, currencyID, fallbackName)
+    local info = FindCurrencyByID(currencyID) or FindCurrencyByItemName(GetItemInfo(currencyID))
+    MarkCurrency(found, info, fallbackName)
+end
+
 local function LoadAllCurrencies()
     wipe(currencyCache)
     local n = GetCurrencyListSize() or 0
     for i = 1, n do
-        local name, isHeader, _, _, _, count, extra1, extra2 = GetCurrencyListInfo(i)
-        if name and not isHeader then
+        local name, isHeader, _, _, _, count, extra1, extra2, itemID = GetCurrencyListInfo(i)
+        local key = NormalizeCurrencyName(name)
+        if key and not isHeader then
             local icon
+            local currencyID = IsLikelyCurrencyItemID(itemID) and itemID or nil
             if type(extra1) == "string" and extra1:find("^Interface\\") then
+                icon = extra1
+            elseif IsLikelyCurrencyItemID(extra1) then
+                currencyID = extra1
+            elseif type(extra1) == "string" and extra1 ~= "" then
                 icon = extra1
             elseif type(extra2) == "string" and extra2:find("^Interface\\") then
                 icon = extra2
+            elseif IsLikelyCurrencyItemID(extra2) then
+                currencyID = currencyID or extra2
+            elseif type(extra2) == "string" and extra2 ~= "" then
+                icon = icon or extra2
             end
-            currencyCache[name:lower()] = {
+            currencyCache[key] = {
                 name = name,
                 icon = icon or "Interface\\Icons\\INV_Misc_Coin_01",
+                currencyID = currencyID,
                 index = i,
                 count =
                     count or 0
             }
         end
     end
+end
+
+local function GetCurrencyDisplayIcon(info)
+    local name = info and NormalizeCurrencyName(info.name)
+    if info and (info.currencyID == HONOR_POINTS_ID or name == "honor points") then
+        local faction = E and E.myfaction or UnitFactionGroup("player") or "Alliance"
+        return "Interface\\PVPFrame\\PVP-Currency-" .. faction
+    end
+
+    if info and (info.currencyID == ARENA_POINTS_ID or name == "arena points" or name == "conquest points") then
+        return "Interface\\PVPFrame\\PVP-ArenaPoints-Icon"
+    end
+
+    if info and info.vendorIcon then
+        return info.vendorIcon
+    end
+
+    return info and info.icon
 end
 
 local function ScanVendorForCurrencies()
@@ -319,22 +465,40 @@ local function ScanVendorForCurrencies()
 
     for i = 1, numItems do
         local honor, arena, count = GetMerchantItemCostInfo(i)
-        if honor > 0 then found["honor points"] = true end
-        if arena > 0 then found["arena points"] = true end
+        if honor > 0 then MarkBuiltinCurrency(found, HONOR_POINTS_ID, "honor points") end
+        if arena > 0 then MarkBuiltinCurrency(found, ARENA_POINTS_ID, "arena points") end
         if count > 0 then
             for j = 1, count do
                 local texture, price, link = GetMerchantItemCostItem(i, j)
+                local matched
                 if link then
                     local name = GetItemInfo(link)
-                    if name then found[name:lower()] = true end
-                elseif texture then
-                    -- Fallback to icon matching if link is nil
-                    for lowerName, info in pairs(currencyCache) do
-                        if info.icon == texture then
-                            found[lowerName] = true
-                            break
-                        end
+                    local info = FindCurrencyByItemName(name) or FindCurrencyByID(ExtractItemID(link))
+                    if info then
+                        MarkCurrencyWithIcon(found, info, nil, texture)
+                        matched = true
                     end
+                end
+
+                if not matched then
+                    local name = GetMerchantCostCurrencyName(i, j)
+                    local info = FindCurrencyByItemName(name)
+                    if info then
+                        MarkCurrencyWithIcon(found, info, nil, texture)
+                        matched = true
+                    end
+                end
+
+                if not matched and texture then
+                    local info = FindCurrencyByIcon(texture) or FindCurrencyByID(texture)
+                    if info then
+                        MarkCurrencyWithIcon(found, info, nil, texture)
+                        matched = true
+                    end
+                end
+
+                if not matched then
+                    ScanMerchantItemTooltipForCurrencies(i, found)
                 end
             end
         end
@@ -405,7 +569,7 @@ local function UpdateCurrencyBar()
 
         frame.info = info
         frame.index = info.index
-        frame.icon:SetTexture(info.icon)
+        frame.icon:SetTexture(GetCurrencyDisplayIcon(info))
         local count = info.count
         if count > 99999 then count = math.floor(count / 1000) .. "k" end
         frame.text:SetText(count)
@@ -740,7 +904,8 @@ local function BuildUI()
         local numRows = SUB.db.numRows or 12
         local max = math.max(0, GetMerchantNumItems() - numRows)
         scrollbar:SetMinMaxValues(0, max)
-        scrollbar:SetValue(math.min(scrollbar:GetValue(), max))
+        offset = 0
+        scrollbar:SetValue(0)
         Refresh()
         if f.UpdateScrollArrows then f.UpdateScrollArrows() end
     end)

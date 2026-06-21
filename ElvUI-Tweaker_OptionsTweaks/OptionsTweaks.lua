@@ -17,6 +17,9 @@ MOD.defaults = {
         gridResults = true,
         maxResults = 40,
     },
+    TabsFix = {
+        enabled = false,
+    },
 }
 MOD.submodules = {}
 

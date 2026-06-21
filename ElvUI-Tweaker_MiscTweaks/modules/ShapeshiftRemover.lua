@@ -521,44 +521,38 @@ function SUB:GetOptions(db)
                         name = "Add custom buffs by entering either:\n" ..
                                "|cff00ff00• Spell ID|r (numbers only, e.g., '16591')\n" ..
                                "|cff00ff00• Buff Name|r (e.g., 'Noggenfogger Elixir') - |cffffaa00must be active on your character|r\n\n" ..
-                               "The addon will automatically detect which type you entered and add it accordingly.\n",
+                               "Press Enter or click Okay in the field to add it.\n",
                     },
                     addBox = {
                         order = 1,
                         type = "input",
                         name = "Spell ID or Buff Name",
-                        desc = "Enter a spell ID (16591) or buff name (Noggenfogger Elixir).\nBuff names must be currently active on your character.",
+                        desc = "Enter a spell ID (16591) or buff name (Noggenfogger Elixir), then press Enter or click Okay.\nBuff names must be currently active on your character.",
                         get = function() return tostring(db._tmpBuffToAdd or "") end,
-                        set = function(_, v) db._tmpBuffToAdd = tostring(v or "") end,
-                        width = "full",
-                    },
-                    addButton = {
-                        order = 2,
-                        type = "execute",
-                        name = "Add",
-                        func = function()
-                            local input = tostring(db._tmpBuffToAdd or ""):gsub("^%s*(.-)%s*$", "%1")
-                            
-                            if input == "" then 
-                                print("|cff00ff00[ShapeshiftRemover]|r Please enter a spell ID or buff name.") 
-                                return 
+                        set = function(_, v)
+                            local input = tostring(v or ""):gsub("^%s*(.-)%s*$", "%1")
+
+                            if input == "" then
+                                db._tmpBuffToAdd = ""
+                                return
                             end
-                            
+
                             local ok, name, spellID = AddBuffSpellID(input)
-                            if ok then 
+                            if ok then
                                 db._tmpBuffToAdd = ""
                                 db.selectedWhitelist = spellID
-                                print("|cff00ff00[ShapeshiftRemover]|r Added " .. tostring(name) .. " (ID: " .. tostring(spellID) .. "). A UI reload is required for the options list to update.") 
-                            else 
+                                print("|cff00ff00[ShapeshiftRemover]|r Added " .. tostring(name) .. " (ID: " .. tostring(spellID) .. "). A UI reload is required for the options list to update.")
+                            else
+                                db._tmpBuffToAdd = input
                                 local errMsg = name or "unknown error"
                                 if errMsg == "buff not found - must be active on player" then
                                     print("|cff00ff00[ShapeshiftRemover]|r Buff '" .. input .. "' not found. Make sure the buff is currently active on your character.")
                                 else
-                                    print("|cff00ff00[ShapeshiftRemover]|r Add failed: " .. errMsg) 
+                                    print("|cff00ff00[ShapeshiftRemover]|r Add failed: " .. errMsg)
                                 end
                             end
                         end,
-                        width = "half",
+                        width = "full",
                     },
                     currentList = {
                         order = 4,

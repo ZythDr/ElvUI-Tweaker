@@ -23,6 +23,7 @@ MOD.defaults = {
     VendorTweaks = {},
     BagSwap = {},
     MicrobarTweaks = { enabled = true, fixGap = false, customButton = false },
+    RollSave = { enabled = false },
 }
 MOD.submodules = {}
 
