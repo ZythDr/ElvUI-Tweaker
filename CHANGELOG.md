@@ -4,6 +4,12 @@ All notable changes to ElvUI Tweaker will be documented in this file.
 
 Older release entries were reconstructed from git commit history.
 
+## 1.5.1 - 2026-06-22
+
+### Improved
+
+- Added a Roll Save setting to auto-confirm bind-on-pickup loot roll popups only for rolls started by Roll Save. This is enabled by default and can be disabled in Roll Save behavior options.
+
 ## 1.5.0 - 2026-06-21
 
 ### Added

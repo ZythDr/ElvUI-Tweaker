@@ -12,6 +12,7 @@ SUB.defaults = {
     trigger = "RIGHT",
     toggleSame = true,
     rollOnSave = true,
+    autoConfirmBind = true,
     announceSaves = true,
     announceRolls = true,
     characters = {},
@@ -42,6 +43,7 @@ local db_local
 local eventFrame = CreateFrame("Frame")
 local hookScanFrame = CreateFrame("Frame")
 local hookedButtons = setmetatable({}, { __mode = "k" })
+local pendingConfirmRolls = {}
 
 local function Print(msg)
     print("|cff00ff00[Roll Save]|r " .. tostring(msg))
@@ -169,6 +171,65 @@ local function DeleteSavedItem(itemID)
     return false
 end
 
+local function GetNow()
+    return (GetTime and GetTime()) or (time and time()) or 0
+end
+
+local function MarkPendingConfirm(rollID, rollType)
+    if not db_local or not db_local.autoConfirmBind then return end
+    if not rollID or rollType == nil then return end
+
+    pendingConfirmRolls[rollID] = {
+        rollType = tonumber(rollType),
+        expires = GetNow() + 5,
+    }
+end
+
+local function ClearPendingConfirm(rollID)
+    if rollID then
+        pendingConfirmRolls[rollID] = nil
+    end
+end
+
+local function ShouldAutoConfirm(rollID, rollType)
+    if not db_local or not db_local.enabled or not db_local.autoConfirmBind then return false end
+
+    local pending = rollID and pendingConfirmRolls[rollID]
+    if not pending then return false end
+
+    if pending.expires and pending.expires < GetNow() then
+        ClearPendingConfirm(rollID)
+        return false
+    end
+
+    local eventRollType = tonumber(rollType)
+    if eventRollType and pending.rollType ~= nil and eventRollType ~= pending.rollType then
+        return false
+    end
+
+    return true
+end
+
+local function HideLootRollConfirm(rollID)
+    if StaticPopup_Hide then
+        StaticPopup_Hide("CONFIRM_LOOT_ROLL", rollID)
+    end
+end
+
+local function AutoConfirmLootRoll(rollID, rollType)
+    if not ShouldAutoConfirm(rollID, rollType) then return false end
+
+    rollType = tonumber(rollType) or tonumber(pendingConfirmRolls[rollID] and pendingConfirmRolls[rollID].rollType)
+    if ConfirmLootRoll and rollID and rollType then
+        ConfirmLootRoll(rollID, rollType)
+        HideLootRollConfirm(rollID)
+        ClearPendingConfirm(rollID)
+        return true
+    end
+
+    return false
+end
+
 local function IsRollAllowed(rollType, canNeed, canGreed, canDisenchant)
     local function IsAvailable(value)
         return value ~= nil and value ~= false and value ~= 0
@@ -180,6 +241,11 @@ local function IsRollAllowed(rollType, canNeed, canGreed, canDisenchant)
     if rollType == 2 then return IsAvailable(canGreed) end
     if rollType == 3 then return IsAvailable(canDisenchant) end
     return false
+end
+
+local function RollSavedChoice(rollID, rollType)
+    MarkPendingConfirm(rollID, rollType)
+    RollOnLoot(rollID, rollType)
 end
 
 local function TriggerMatches(button)
@@ -237,7 +303,7 @@ local function OnRollButtonMouseUp(button, mouseButton)
 
     local ok, action = SaveItemRoll(itemID, rollType, name, link, texture, true)
     if ok and action == "saved" and db_local.rollOnSave then
-        RollOnLoot(rollID, rollType)
+        RollSavedChoice(rollID, rollType)
     end
 end
 
@@ -309,19 +375,21 @@ local function AutoRoll(rollID)
     entry.link = entry.link or link
     entry.texture = entry.texture or texture
 
-    RollOnLoot(rollID, rollType)
+    RollSavedChoice(rollID, rollType)
     if db_local.announceRolls then
         Print("Auto rolled " .. ROLL_LABELS[rollType] .. " on " .. tostring(name or entry.name or ("item " .. itemID)) .. ".")
     end
 end
 
-eventFrame:SetScript("OnEvent", function(_, event, rollID)
+eventFrame:SetScript("OnEvent", function(_, event, rollID, rollType)
     if event == "START_LOOT_ROLL" then
         HookRollFrames()
         ScheduleHookScan()
         if db_local and db_local.enabled then
             AutoRoll(rollID)
         end
+    elseif event == "CONFIRM_LOOT_ROLL" then
+        AutoConfirmLootRoll(rollID, rollType)
     end
 end)
 
@@ -394,15 +462,23 @@ function SUB:GetOptions(db)
                         get = function() return db.rollOnSave ~= false end,
                         set = function(_, value) db.rollOnSave = value and true or false end,
                     },
-                    announceSaves = {
+                    autoConfirmBind = {
                         order = 4,
+                        type = "toggle",
+                        name = "Auto-confirm bind popups",
+                        desc = "Automatically accept the bind-on-pickup confirmation popup only for rolls started by Roll Save.",
+                        get = function() return db.autoConfirmBind == true end,
+                        set = function(_, value) db.autoConfirmBind = value and true or false end,
+                    },
+                    announceSaves = {
+                        order = 5,
                         type = "toggle",
                         name = "Print save changes",
                         get = function() return db.announceSaves ~= false end,
                         set = function(_, value) db.announceSaves = value and true or false end,
                     },
                     announceRolls = {
-                        order = 5,
+                        order = 6,
                         type = "toggle",
                         name = "Print automatic rolls",
                         get = function() return db.announceRolls ~= false end,
@@ -486,6 +562,7 @@ end
 function SUB:OnEnable(db)
     db_local = ApplyDefaults(db or db_local)
     eventFrame:RegisterEvent("START_LOOT_ROLL")
+    eventFrame:RegisterEvent("CONFIRM_LOOT_ROLL")
     HookRollFrames()
     ScheduleHookScan()
 end
@@ -493,6 +570,8 @@ end
 function SUB:OnDisable(db)
     db_local = ApplyDefaults(db or db_local)
     eventFrame:UnregisterEvent("START_LOOT_ROLL")
+    eventFrame:UnregisterEvent("CONFIRM_LOOT_ROLL")
+    wipe(pendingConfirmRolls)
 end
 
 MOD:RegisterSubmodule("RollSave", SUB)
