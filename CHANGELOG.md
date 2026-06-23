@@ -4,6 +4,17 @@ All notable changes to ElvUI Tweaker will be documented in this file.
 
 Older release entries were reconstructed from git commit history.
 
+## 1.5.2 - 2026-06-23
+
+### Added
+
+- Added a confirmed **Delete All** action to Roll Save's Saved Items tab for clearing every saved roll on the current character.
+- Added Roll Save's **Greed if Disenchant unavailable** behavior option, enabled by default, for saved Disenchant rolls when no enchanter roll is available.
+
+### Changed
+
+- Widened Roll Save behavior toggles so option labels are less likely to truncate in ElvUI's options UI.
+
 ## 1.5.1 - 2026-06-22
 
 ### Improved

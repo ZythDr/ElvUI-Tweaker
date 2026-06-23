@@ -37,7 +37,8 @@ A collection of general interface improvements:
 - **Roll Save:** Lets you save loot roll choices per character.
   - **Save from Roll Buttons**: Right-click, or use a configurable modifier-right-click, on Need, Greed, Disenchant, or Pass to remember that choice for the item.
   - **Automatic Future Rolls**: When the same item drops again, Roll Save automatically repeats the saved choice if that roll option is available.
-  - **Saved Item List**: Add, update, or remove saved roll choices manually by item ID or item link.
+  - **Disenchant Fallback**: Saved Disenchant rolls can fall back to Greed when Disenchant is unavailable, useful for groups without an enchanter.
+  - **Saved Item List**: Add, update, or remove saved roll choices manually by item ID or item link. Saved item rolls are always per-character only; Roll Save behavior settings can still follow ElvUI Tweaker's account-wide or per-character setting.
 
 - **Chat Editbox Mover:** Detaches the chat typing box from the main chat window so you can place it anywhere on your screen.
 - **Five Second Rule:** Adds a visual "spark" to the Player UnitFrame's power/mana bar that tracks your mana regeneration ticks, and visualizes the 5-second delay before natural mana regeneration resumes after casting a spell.

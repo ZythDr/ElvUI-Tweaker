@@ -13,6 +13,7 @@ SUB.defaults = {
     toggleSame = true,
     rollOnSave = true,
     autoConfirmBind = true,
+    greedIfNoDisenchant = true,
     announceSaves = true,
     announceRolls = true,
     characters = {},
@@ -171,6 +172,24 @@ local function DeleteSavedItem(itemID)
     return false
 end
 
+local function CountSavedItems(db)
+    local store = GetCharacterStore(db or db_local)
+    local count = 0
+    for _ in pairs(store.items) do
+        count = count + 1
+    end
+    return count
+end
+
+local function DeleteAllSavedItems(db)
+    local store = GetCharacterStore(db or db_local)
+    local count = CountSavedItems(db or db_local)
+    if count <= 0 then return 0 end
+
+    wipe(store.items)
+    return count
+end
+
 local function GetNow()
     return (GetTime and GetTime()) or (time and time()) or 0
 end
@@ -230,17 +249,28 @@ local function AutoConfirmLootRoll(rollID, rollType)
     return false
 end
 
-local function IsRollAllowed(rollType, canNeed, canGreed, canDisenchant)
-    local function IsAvailable(value)
-        return value ~= nil and value ~= false and value ~= 0
-    end
+local function IsAvailable(value)
+    return value ~= nil and value ~= false and value ~= 0
+end
 
+local function IsRollAllowed(rollType, canNeed, canGreed, canDisenchant)
     rollType = tonumber(rollType)
     if rollType == 0 then return true end
     if rollType == 1 then return IsAvailable(canNeed) end
     if rollType == 2 then return IsAvailable(canGreed) end
     if rollType == 3 then return IsAvailable(canDisenchant) end
     return false
+end
+
+local function ResolveSavedRollType(rollType, canNeed, canGreed, canDisenchant)
+    rollType = tonumber(rollType)
+    if IsRollAllowed(rollType, canNeed, canGreed, canDisenchant) then
+        return rollType, false
+    end
+
+    if rollType == 3 and db_local and db_local.greedIfNoDisenchant and IsAvailable(canGreed) then
+        return 2, true
+    end
 end
 
 local function RollSavedChoice(rollID, rollType)
@@ -363,10 +393,11 @@ local function AutoRoll(rollID)
     local entry = store.items[itemID]
     if not entry then return end
 
-    local rollType = tonumber(entry.rollType)
-    if not IsRollAllowed(rollType, canNeed, canGreed, canDisenchant) then
+    local savedRollType = tonumber(entry.rollType)
+    local rollType, usedFallback = ResolveSavedRollType(savedRollType, canNeed, canGreed, canDisenchant)
+    if not rollType then
         if db_local.announceRolls then
-            Print("Saved roll for " .. tostring(name or entry.name or ("item " .. itemID)) .. " is " .. tostring(ROLL_LABELS[rollType]) .. ", but that option is not available.")
+            Print("Saved roll for " .. tostring(name or entry.name or ("item " .. itemID)) .. " is " .. tostring(ROLL_LABELS[savedRollType]) .. ", but that option is not available.")
         end
         return
     end
@@ -377,7 +408,11 @@ local function AutoRoll(rollID)
 
     RollSavedChoice(rollID, rollType)
     if db_local.announceRolls then
-        Print("Auto rolled " .. ROLL_LABELS[rollType] .. " on " .. tostring(name or entry.name or ("item " .. itemID)) .. ".")
+        if usedFallback then
+            Print("Auto rolled Greed on " .. tostring(name or entry.name or ("item " .. itemID)) .. " because Disenchant was not available.")
+        else
+            Print("Auto rolled " .. ROLL_LABELS[rollType] .. " on " .. tostring(name or entry.name or ("item " .. itemID)) .. ".")
+        end
     end
 end
 
@@ -419,7 +454,7 @@ function SUB:GetOptions(db)
             description = {
                 order = 1,
                 type = "description",
-                name = "Save loot roll choices per character and repeat them automatically when the same item drops again.",
+                name = "Save loot roll choices per character and repeat them automatically when the same item drops again.\n\nSaved item rolls are always per-character only. Behavior settings follow ElvUI Tweaker's account-wide or per-character setting.",
             },
             enabled = {
                 order = 2,
@@ -446,9 +481,16 @@ function SUB:GetOptions(db)
                         get = function() return db.trigger or "RIGHT" end,
                         set = function(_, value) db.trigger = value end,
                     },
+                    triggerSpacer = {
+                        order = 1.5,
+                        type = "description",
+                        name = " ",
+                        width = "double",
+                    },
                     toggleSame = {
                         order = 2,
                         type = "toggle",
+                        width = "double",
                         name = "Repeat trigger removes saved roll",
                         desc = "Using the save trigger on an item that already has the same saved roll removes it.",
                         get = function() return db.toggleSame ~= false end,
@@ -457,6 +499,7 @@ function SUB:GetOptions(db)
                     rollOnSave = {
                         order = 3,
                         type = "toggle",
+                        width = "double",
                         name = "Roll immediately when saving",
                         desc = "When you save a roll from the loot roll buttons, also roll that choice for the current drop.",
                         get = function() return db.rollOnSave ~= false end,
@@ -465,21 +508,33 @@ function SUB:GetOptions(db)
                     autoConfirmBind = {
                         order = 4,
                         type = "toggle",
+                        width = "double",
                         name = "Auto-confirm bind popups",
                         desc = "Automatically accept the bind-on-pickup confirmation popup only for rolls started by Roll Save.",
                         get = function() return db.autoConfirmBind == true end,
                         set = function(_, value) db.autoConfirmBind = value and true or false end,
                     },
-                    announceSaves = {
+                    greedIfNoDisenchant = {
                         order = 5,
                         type = "toggle",
+                        width = "double",
+                        name = "Greed if Disenchant unavailable",
+                        desc = "When the saved roll is Disenchant but Disenchant is not available, roll Greed instead if Greed is available.",
+                        get = function() return db.greedIfNoDisenchant == true end,
+                        set = function(_, value) db.greedIfNoDisenchant = value and true or false end,
+                    },
+                    announceSaves = {
+                        order = 6,
+                        type = "toggle",
+                        width = "double",
                         name = "Print save changes",
                         get = function() return db.announceSaves ~= false end,
                         set = function(_, value) db.announceSaves = value and true or false end,
                     },
                     announceRolls = {
-                        order = 6,
+                        order = 7,
                         type = "toggle",
+                        width = "double",
                         name = "Print automatic rolls",
                         get = function() return db.announceRolls ~= false end,
                         set = function(_, value) db.announceRolls = value and true or false end,
@@ -494,7 +549,7 @@ function SUB:GetOptions(db)
                     addDesc = {
                         order = 0,
                         type = "description",
-                        name = "Saved rolls are stored per character. You can save from roll buttons or add an item manually by item ID.",
+                        name = "Saved rolls are always stored per character only and are never shared account-wide. You can save from roll buttons or add an item manually by item ID.",
                     },
                     itemID = {
                         order = 1,
@@ -550,6 +605,28 @@ function SUB:GetOptions(db)
                             if DeleteSavedItem(db.selectedItem) then
                                 Print("Removed saved roll for item ID " .. tostring(db.selectedItem) .. ".")
                                 db.selectedItem = nil
+                            end
+                        end,
+                    },
+                    deleteAll = {
+                        order = 6,
+                        type = "execute",
+                        name = "Delete All",
+                        desc = "Delete every saved roll for this character.",
+                        confirm = function()
+                            local count = CountSavedItems(db)
+                            if count <= 0 then return false end
+                            return "Delete all " .. tostring(count) .. " saved roll" .. (count == 1 and "" or "s") .. " for this character?"
+                        end,
+                        func = function()
+                            local count = DeleteAllSavedItems(db)
+                            db.selectedItem = nil
+
+                            if count > 0 then
+                                RefreshOptions()
+                                Print("Removed " .. tostring(count) .. " saved roll" .. (count == 1 and "" or "s") .. " for this character.")
+                            else
+                                Print("No saved rolls to delete.")
                             end
                         end,
                     },
